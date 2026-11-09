@@ -1,0 +1,22 @@
+name: Uptime check
+on:
+  schedule: [{ cron: "*/15 * * * *" }]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    # Set the repository variable UPTIME_ENABLED=true after the first deploy.
+    if: vars.UPTIME_ENABLED == 'true'
+    steps:
+      - name: Health endpoint
+        run: curl -fsS --max-time 20 --retry 2 --retry-delay 10 https://biyeshadi.live/api/health
+      - name: WhatsApp session connected (OpenWA only)
+        if: vars.CHANNEL != 'whatsapp'
+        run: curl -fsS --max-time 20 https://biyeshadi.live/api/health | grep -q '"whatsapp":"ready"'
+      # Only once on the Cloud API: set the repository variable CHANNEL=whatsapp.
+      - name: Webhook route answers (403 without a valid token is healthy)
+        if: vars.CHANNEL == 'whatsapp'
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --retry 2 "https://biyeshadi.live/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=uptime-check")
+          test "$code" = "403" || { echo "webhook returned $code"; exit 1; }

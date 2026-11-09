@@ -1,0 +1,14 @@
+{$DOMAIN} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	# Internal endpoints: Inngest reaches the app over the private network, never through here.
+	@internal path /api/inngest* /api/simulator* /api/openwa*
+	respond @internal 404
+	reverse_proxy app:3000
+}

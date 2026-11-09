@@ -1,0 +1,76 @@
+name: Test, build and deploy
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  APP_IMAGE: ghcr.io/${{ github.repository }}/app:${{ github.sha }}
+  MIGRATE_IMAGE: ghcr.io/${{ github.repository }}/migrate:${{ github.sha }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_PASSWORD: test, POSTGRES_DB: biyeshadi_test }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready" --health-interval 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/biyeshadi_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with: { context: ., target: runner, push: true, tags: "${{ env.APP_IMAGE }}", cache-from: type=gha, cache-to: "type=gha,mode=max" }
+      - uses: docker/build-push-action@v6
+        with: { context: ., target: builder, push: true, tags: "${{ env.MIGRATE_IMAGE }}", cache-from: type=gha }
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Set the repository variable DEPLOY_ENABLED=true once the VPS is ready.
+    if: vars.DEPLOY_ENABLED == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Copy compose files
+        run: scp docker-compose.yml Caddyfile "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/biyeshadi/" && scp -r deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/biyeshadi/"
+      - name: Roll out
+        run: |
+          ssh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" bash -se <<SCRIPT
+          set -euo pipefail
+          cd /opt/biyeshadi
+          export APP_IMAGE="${APP_IMAGE}" MIGRATE_IMAGE="${MIGRATE_IMAGE}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker compose pull --ignore-buildable app migrate
+          docker compose run --rm migrate
+          docker compose up -d --no-build --remove-orphans
+          for i in \$(seq 1 30); do
+            docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" && { echo healthy; exit 0; }
+            sleep 5
+          done
+          echo "app did not become healthy" >&2; exit 1
+          SCRIPT

@@ -1,0 +1,151 @@
+# Memory limits total 7.4 GB on the 8 GB VPS: tight but with OpenWA included. Drop the openwa service after moving to the Cloud API.
+x-app-env: &app-env
+  DATABASE_URL: postgres://biyeshadi:${POSTGRES_PASSWORD}@postgres:5432/biyeshadi
+  CHANNEL: ${CHANNEL:-openwa}
+  LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
+  TRANSCRIBER: ${TRANSCRIBER:-groq}
+  EMBEDDER: e5
+  STORAGE: ${STORAGE:-r2}
+  INNGEST_BASE_URL: http://inngest:8288
+  INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY}
+  INNGEST_SIGNING_KEY: ${INNGEST_SIGNING_KEY}
+  AUTH_SECRET: ${AUTH_SECRET}
+  AUTH_TRUST_HOST: "true"
+  AUTH_URL: https://${DOMAIN:-biyeshadi.live}/api/auth
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+  OPENWA_BASE_URL: http://openwa:2785
+  OPENWA_API_KEY: ${OPENWA_API_KEY:-}
+  OPENWA_SESSION: ${OPENWA_SESSION:-biyeshadi}
+  OPENWA_WEBHOOK_SECRET: ${OPENWA_WEBHOOK_SECRET:-}
+  OPENWA_WEBHOOK_URL: http://app:3000/api/openwa/webhook
+  WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+  WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+  WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+  WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+  R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+  R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+  R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+  R2_BUCKET: ${R2_BUCKET:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SIMULATOR_TOKEN: ${SIMULATOR_TOKEN:-}
+
+services:
+  app:
+    image: ${APP_IMAGE:-biyeshadi-app}
+    build: { context: ., target: runner }
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    volumes: [media:/app/.data]
+    mem_limit: 2g
+    networks: [internal]
+
+  # One-shot: `docker compose run --rm migrate`
+  migrate:
+    image: ${MIGRATE_IMAGE:-biyeshadi-migrate}
+    build: { context: ., target: builder }
+    profiles: [tools]
+    command: sh -c "pnpm db:migrate && pnpm db:seed"
+    environment:
+      <<: *app-env
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [internal]
+
+  # Interim WhatsApp gateway. Reachable only on the internal network; Caddy has no route to it.
+  # Built from the same commit reviewed in deploy/openwa/run-local.sh.
+  openwa:
+    build: https://github.com/rmyndharis/OpenWA.git#51e848c0b0b8af2f4426ec2d86b17e4af5ec95ef
+    image: biyeshadi-openwa:51e848c
+    restart: unless-stopped
+    stop_grace_period: 75s
+    environment:
+      NODE_ENV: production
+      API_MASTER_KEY: ${OPENWA_API_KEY:-}
+      DATABASE_TYPE: sqlite
+      ENGINE_TYPE: whatsapp-web.js
+      AUTO_START_SESSIONS: "true"
+      RESOLVE_LID_TO_PHONE: "true"
+      MESSAGE_RETENTION_DAYS: "30"
+      WEBHOOK_MEDIA_INLINE_MAX_BYTES: "0"
+      MEDIA_DOWNLOAD_MAX_BYTES: "20971520"
+      SSRF_ALLOWED_HOSTS: app
+      SEND_PACING_ENABLED: "true"
+      SEND_PACING_WARMUP_SCHEDULE: 20,40,80,160,320,640,1000
+      SEND_PACING_COLD_DAILY_CAP: 5,10,20,40,60,80,100
+    volumes: [openwadata:/app/data]
+    mem_limit: 1500m
+    pids_limit: 1024
+    networks: [internal]
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: biyeshadi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: biyeshadi
+    command: >
+      postgres -c shared_buffers=512MB -c effective_cache_size=1500MB -c work_mem=16MB -c max_connections=100
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/init-db.sql:/docker-entrypoint-initdb.d/10-inngest.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U biyeshadi -d biyeshadi]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 2g
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 400mb --maxmemory-policy noeviction
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+    networks: [internal]
+
+  inngest:
+    image: inngest/inngest:v1.51.0
+    restart: unless-stopped
+    command: >
+      inngest start
+      --sdk-url http://app:3000/api/inngest
+      --port 8288
+      --postgres-uri postgres://biyeshadi:${POSTGRES_PASSWORD}@postgres:5432/inngest
+      --redis-uri redis://redis:6379
+    environment:
+      INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY:?set INNGEST_EVENT_KEY}
+      INNGEST_SIGNING_KEY: ${INNGEST_SIGNING_KEY:?set INNGEST_SIGNING_KEY}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    mem_limit: 1g
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-biyeshadi.live}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on: [app]
+    mem_limit: 256m
+    networks: [internal]
+
+volumes: { openwadata: {}, pgdata: {}, redisdata: {}, media: {}, caddydata: {}, caddyconfig: {} }
+networks: { internal: {} }
