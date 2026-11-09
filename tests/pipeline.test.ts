@@ -1,13 +1,14 @@
 import { eq } from "drizzle-orm";
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { audit } from "@/lib/audit";
-import { mockMediaKey } from "@/lib/channel/mock";
+import { mockMediaKey, MockChannelAdapter } from "@/lib/channel/mock";
+import { settleVerifiedPayment } from "@/lib/payments";
 import { ingestPayload } from "@/lib/conversation/ingest";
 import { inServiceWindow, sendToUser } from "@/lib/conversation/outbound";
 import { handleImage, preflight, storeMedia, transcribeMessage } from "@/lib/conversation/pipeline";
 import { db, schema } from "@/lib/db";
-import { getMatch } from "@/lib/matches";
+import { advanceMatch, getMatch } from "@/lib/matches";
 import { confirmProfilePhoto } from "@/lib/photos";
 import { eraseUser, guardReply, isStopCommand, parseAgeGate, parseYesNo } from "@/lib/safety";
 import { setSetting } from "@/lib/settings";
@@ -116,6 +117,56 @@ describe("age gate and consent", () => {
     const m = await inbound(P, "", "voice", { mediaId: "v1" });
     expect(await preflight(m.id)).toBe("done");
     expect((await outbound(P)).at(-1)).toContain("লিখে");
+  });
+});
+
+describe("sends that fail mid-step", () => {
+  const down = () => vi.spyOn(MockChannelAdapter.prototype, "sendText").mockRejectedValue(new Error("session down"));
+  afterEach(() => vi.restoreAllMocks());
+
+  it("the age gate keeps its message queued and is not re-judged by a retry", async () => {
+    down();
+    const m = await inbound(P, "হাই");
+    expect(await preflight(m.id)).toBe("done");
+    expect((await user())!.status).toBe("awaiting_age");
+    const rows = await db().select().from(schema.messages).where(eq(schema.messages.direction, "outbound"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "queued" });
+    expect(rows[0]!.rawText).toContain("১৮");
+    expect((await db().select().from(schema.messages).where(eq(schema.messages.id, m.id)))[0]!.processedAt).toBeTruthy();
+  });
+  it("a retry sends the text first queued, not a recomputed one", async () => {
+    await makeUser(P, "male");
+    const spy = down();
+    await expect(sendToUser(P, "আসল", { dedupeKey: "k" })).rejects.toThrow();
+    spy.mockResolvedValue({ waMessageId: "w1" });
+    await sendToUser(P, "অন্য লেখা", { dedupeKey: "k" });
+    expect((spy.mock.lastCall as unknown as string[])[1]).toBe("আসল");
+  });
+  it("a card that failed to send is still sent when the step retries", async () => {
+    const OTHER = "+8801711000599";
+    await makeUser(P, "male"); await makeUser(OTHER, "female");
+    const match = await makeMatch(P, OTHER, "proposed");
+    const spy = down();
+    await expect(advanceMatch(match.id, "proposed")).rejects.toThrow(); // Inngest retries the step
+    spy.mockResolvedValue({ waMessageId: "w2" });
+    await advanceMatch(match.id, "proposed");
+    expect((await getMatch(match.id))!.state).toBe("shown_to_a");
+    expect(spy).toHaveBeenCalled();
+  });
+  it("during an outage both released numbers stay queued, whichever payer's event retries", async () => {
+    const OTHER = "+8801711000598";
+    await makeUser(P, "male"); await makeUser(OTHER, "female");
+    const match = await makeMatch(P, OTHER, "payment_pending");
+    await db().insert(schema.payments).values([
+      { matchId: match.id, payerPhone: P, trxId: "AAAA111111", amount: 300, status: "verified" },
+      { matchId: match.id, payerPhone: OTHER, trxId: "BBBB111111", amount: 300, status: "verified" },
+    ]);
+    down();
+    await settleVerifiedPayment(match.id, P);
+    await settleVerifiedPayment(match.id, P);
+    const rows = await db().select().from(schema.messages).where(eq(schema.messages.status, "queued"));
+    expect(rows.map((r) => r.dedupeKey).sort()).toEqual([`release-${match.id}-${P}`, `release-${match.id}-${OTHER}`].sort());
   });
 });
 

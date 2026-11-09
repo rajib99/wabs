@@ -55,11 +55,11 @@ export async function preflight(messageId: string): Promise<NextAction> {
     await scrubMessages(phone);
     if (user.status === "new" || user.status === "consent_declined") {
       await d.update(users).set({ status: "awaiting_age" }).where(eq(users.phone, phone));
-      await sendToUser(phone, await msg("welcome_age_gate"), { dedupeKey: gateKey });
+      await sendToUser(phone, await msg("welcome_age_gate"), { dedupeKey: gateKey, deferOnFailure: true });
       return done();
     }
     if (!text) {
-      await sendToUser(phone, await msg("voice_before_consent"), { dedupeKey: gateKey });
+      await sendToUser(phone, await msg("voice_before_consent"), { dedupeKey: gateKey, deferOnFailure: true });
       return done();
     }
     if (user.status === "awaiting_age") {
@@ -71,27 +71,27 @@ export async function preflight(messageId: string): Promise<NextAction> {
         return "done";
       }
       if (verdict === "unclear") {
-        await sendToUser(phone, await msg("age_gate_retry"), { dedupeKey: gateKey });
+        await sendToUser(phone, await msg("age_gate_retry"), { dedupeKey: gateKey, deferOnFailure: true });
         return done();
       }
       await d.update(users).set({ status: "awaiting_consent", ageConfirmedAt: new Date() }).where(eq(users.phone, phone));
-      await sendToUser(phone, await msg("consent_request"), { dedupeKey: gateKey });
+      await sendToUser(phone, await msg("consent_request"), { dedupeKey: gateKey, deferOnFailure: true });
       return done();
     }
     if (user.status === "awaiting_consent") {
       const answer = parseYesNo(text);
       if (answer === "unclear") {
-        await sendToUser(phone, await msg("consent_retry"), { dedupeKey: gateKey });
+        await sendToUser(phone, await msg("consent_retry"), { dedupeKey: gateKey, deferOnFailure: true });
         return done();
       }
       if (answer === "no") {
         await d.update(users).set({ status: "consent_declined" }).where(eq(users.phone, phone));
-        await sendToUser(phone, await msg("consent_declined"), { dedupeKey: gateKey });
+        await sendToUser(phone, await msg("consent_declined"), { dedupeKey: gateKey, deferOnFailure: true });
         return done();
       }
       await d.update(users).set({ status: "active", consentAt: new Date() }).where(eq(users.phone, phone));
       const next = await getNextQuestion(phone);
-      await sendToUser(phone, await msg("consent_accepted", { question: next?.bengaliText ?? "" }), { dedupeKey: gateKey });
+      await sendToUser(phone, await msg("consent_accepted", { question: next?.bengaliText ?? "" }), { dedupeKey: gateKey, deferOnFailure: true });
       return done();
     }
     return done();
@@ -100,7 +100,7 @@ export async function preflight(messageId: string): Promise<NextAction> {
   if (m.type === "voice") return "voice";
   if (m.type === "image") return "image";
   if (m.type === "text" && text.trim()) return "agent";
-  await sendToUser(phone, await msg("unsupported_type"), { dedupeKey: gateKey });
+  await sendToUser(phone, await msg("unsupported_type"), { dedupeKey: gateKey, deferOnFailure: true });
   return done();
 }
 

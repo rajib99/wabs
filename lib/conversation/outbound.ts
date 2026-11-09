@@ -53,8 +53,8 @@ export async function sendToUser(phone: string, text: string, opts: SendOptions 
     const { waMessageId } = type === "template"
       ? await channel.sendTemplate(phone, templateName, await getSetting<string>("template_language"), opts.templateParams ?? [])
       : opts.image
-        ? await channel.sendImage(phone, opts.image, text)
-        : await channel.sendText(phone, text);
+        ? await channel.sendImage(phone, opts.image, row.rawText ?? text)
+        : await channel.sendText(phone, row.rawText ?? text); // a retry sends what was first queued, never a recomputed text
     await d.update(schema.messages).set({ status: "sent", waMessageId, statusAt: new Date() }).where(eq(schema.messages.id, row.id));
     return "sent";
   } catch (err) {

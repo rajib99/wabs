@@ -85,7 +85,7 @@ export async function verifiedPayers(matchId: string): Promise<string[]> {
 /** The ONLY place one user's number is sent to another. Each direction is delivered at most once. */
 export async function releaseContact(match: Match, to: string) {
   const number = otherParty(match, to);
-  await sendToUser(to, await msg("contact_release", { phone: number }), { dedupeKey: `release-${match.id}-${to}`, template: "contact_release" });
+  await sendToUser(to, await msg("contact_release", { phone: number }), { dedupeKey: `release-${match.id}-${to}`, template: "contact_release", deferOnFailure: true });
   await audit("system", "contact.released", "match", match.id, { direction: match.userA === to ? "b_to_a" : "a_to_b" });
 }
 
@@ -104,7 +104,8 @@ export async function settleVerifiedPayment(matchId: string, phone: string) {
       await releaseContact(match, match.userB);
     }
   } else if (match.state === "contact_released") {
-    await releaseContact(match, phone);
+    // Everyone who has paid, not only this payer: a retried step must not leave anyone out.
+    for (const payer of await verifiedPayers(matchId)) await releaseContact(match, payer);
   } else if (match.state === "declined" || match.state === "expired") {
     await db().insert(schema.escalations).values({
       phone, kind: "refund", matchId, reason: `Payment verified after the match closed as ${match.state}. Decide refund.`,
@@ -141,7 +142,7 @@ export async function handleSecondPaymentTimeout(matchId: string, payer: string)
   await transition(matchId, "contact_released", "system", { closeReason: "one_sided_timeout" });
   await releaseContact(match, payer);
   const other = otherParty(match, payer);
-  await sendToUser(other, await msg("contact_shared_notice"), { dedupeKey: `shared-${matchId}-${other}`, template: "contact_release" });
+  await sendToUser(other, await msg("contact_shared_notice"), { dedupeKey: `shared-${matchId}-${other}`, template: "contact_release", deferOnFailure: true });
   await audit("system", "contact.one_sided_release", "match", matchId);
   return "one_sided";
 }

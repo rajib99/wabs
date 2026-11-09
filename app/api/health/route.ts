@@ -10,7 +10,8 @@ export async function GET() {
   try {
     await db().execute(sql`select 1`);
     // The WhatsApp session can drop while the app stays healthy, so it is reported but does not fail the check.
-    const whatsapp = env.channel() === "openwa" ? (await sessionState()).status ?? "unreachable" : undefined;
+    const state = env.channel() === "openwa" ? await sessionState() : null;
+    const whatsapp = state ? (state.reachable ? (state.status ?? "no_session") : "unreachable") : undefined;
     return NextResponse.json({ status: "ok", db: "ok", whatsapp });
   } catch {
     return NextResponse.json({ status: "degraded", db: "down" }, { status: 503 });

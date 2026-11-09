@@ -120,8 +120,8 @@ async function toPayment(x: string, y: string) {
 
 async function payAndVerify(phone: string, matchId: string, trx: string) {
   await say(phone, `পাঠিয়েছি 01712345678 ${trx}`);
-  const [p] = await db().select().from(schema.payments).where(eq(schema.payments.trxId, trx));
-  if (!p) throw new Error(`payment ${trx} not recorded`);
+  // Waits for the row, not the reply: a proactive reminder can arrive first and look like the answer.
+  const p = await waitFor(`payment ${trx} recorded`, async () => (await db().select().from(schema.payments).where(eq(schema.payments.trxId, trx)))[0]);
   if (p.matchId !== matchId) throw new Error("payment on wrong match");
   await verifyPayment(p.id, "simulator@admin");
 }
@@ -265,8 +265,8 @@ async function main() {
     console.log("\n--- couple 6: rejected payment, then retry ---");
     const m6 = await toPayment(c6m!.phone, c6f!.phone);
     await say(c6m!.phone, "পাঠিয়েছি 01712345678 SIMC000001");
-    const [bad] = await d.select().from(schema.payments).where(eq(schema.payments.trxId, "SIMC000001"));
-    await rejectPayment(bad!.id, "simulator@admin", "টাকা পাওয়া যায়নি");
+    const bad = await waitFor("payment SIMC000001", async () => (await d.select().from(schema.payments).where(eq(schema.payments.trxId, "SIMC000001")))[0]);
+    await rejectPayment(bad.id, "simulator@admin", "টাকা পাওয়া যায়নি");
     await waitText(c6m!.phone, "টাকা পাওয়া যায়নি");
     check("rejected payment gets the reason in Bengali", true);
     await payAndVerify(c6m!.phone, m6.id, "SIMC000002");

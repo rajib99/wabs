@@ -153,7 +153,10 @@ export async function respondToMatch(phone: string, matchId: string, action: "in
 /** Advances a match after a state change. Called from the match-advance Inngest function. */
 export async function advanceMatch(matchId: string, state: string) {
   const match = await getMatch(matchId);
-  if (!match || match.state !== state) return; // a later change superseded this event
+  if (!match) return;
+  // A retry can find its own transition already done: carry on so the card still goes out (sends are deduped).
+  const resumed = (state === "proposed" && match.state === "shown_to_a") || (state === "a_interested" && match.state === "shown_to_b");
+  if (match.state !== state && !resumed) return; // a later change superseded this event
   if (state === "proposed") {
     await transition(matchId, "shown_to_a", "system");
     await showCard(match, match.userA);
