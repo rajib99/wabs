@@ -27,7 +27,7 @@ Log in at `/admin`, open **সিমুলেটর**, and chat as any phone num
 
 | Env | Development | Production |
 | --- | --- | --- |
-| `CHANNEL` | `mock` | `openwa` for now, `whatsapp` after Meta approval |
+| `CHANNEL` | `mock` | `messenger` |
 | `LLM_PROVIDER` | `mock` (rule-based, refused with `CHANNEL=whatsapp`) | `deepseek` |
 | `TRANSCRIBER` | `mock` (looks up `samples/voice/manifest.json`) | `groq` |
 | `EMBEDDER` | `e5` or `mock` | `e5` |
@@ -35,62 +35,56 @@ Log in at `/admin`, open **সিমুলেটর**, and chat as any phone num
 
 Each secret is checked the first time its feature is used, and the error names what is missing.
 
-## Running on real WhatsApp with OpenWA (interim)
+## Running on Facebook Messenger
 
-[OpenWA](https://github.com/rmyndharis/OpenWA) links a phone number the way WhatsApp Web does. It is **unofficial**, which breaks WhatsApp's terms, and the number can be restricted or banned at any time with no appeal we control. Use a dedicated number you can afford to lose: not your personal one, and not the number you will register with the Cloud API.
+BS talks to people through your Facebook Page. Messenger identifies people by a Page-scoped ID, not a phone number, so after consent BS asks for a contact number using Messenger's "share my number" button. That is the number a paid match receives.
 
-**First run on your machine** (needs Node 22 via nvm, Google Chrome and the Inngest dev server):
+- **Shared with the button:** the number comes from the person's Facebook profile and is treated as verified.
+- **Typed instead:** it lands in the admin inbox as **নম্বর যাচাই**. That person is not matched until someone phones the number and presses **ফোন করে যাচাই করেছি**.
 
-1. In `.env`, set `CHANNEL=openwa`, `LLM_PROVIDER=deepseek`, `DEEPSEEK_API_KEY`, and `TRANSCRIBER=groq` with `GROQ_API_KEY` for voice notes.
-2. Start everything, each in its own terminal: `pnpm openwa`, `pnpm build && pnpm start`, `pnpm dev:inngest`.
-3. Open `/admin/whatsapp`, add your test numbers to **পরীক্ষকের তালিকা**, then press **সংযোগ শুরু করুন** and scan the QR from the business phone.
-4. Set the bKash number under **বার্তা ও মূল্য**, and message the number from a tester's phone.
+### Setup
 
-Everything starts closed: **the tester list begins empty, so BS ignores all strangers** and stores nothing about them. Turn it off only when you are ready for the public.
+1. **Facebook Page:** create it, named consistently with the website.
+2. **Meta app:** create one at developers.facebook.com, add the **Messenger** product, and connect the Page.
+3. **App settings:**
+   - **Advanced:** turn on **Require App Secret**.
+   - **Basic:** set **Privacy Policy URL** to `https://biyeshadi.live/privacy` and **Data Deletion Instructions URL** to `https://biyeshadi.live/data-deletion`.
+4. **Page token:** in Business Settings, create a **System User**, give it the Page, and generate a long-lived Page token with `pages_messaging`. Add `page_utility_messaging` if you will use utility templates.
+5. **`.env`:** set `CHANNEL=messenger`, the `MESSENGER_*` values and `PUBLIC_URL`, plus the DeepSeek and Groq keys.
+6. **Webhook:** deploy, then set the Messenger webhook to `https://biyeshadi.live/api/messenger/webhook` with your `MESSENGER_VERIFY_TOKEN`.
+7. **Page menu:** in `/admin/channel`, press **Messenger সেটআপ প্রয়োগ করুন**. This sets Get Started, the greeting and the menu, and subscribes the app to the Page's events.
+8. **Response mode:** in Page Settings → Advanced Messaging, set the response mode to **Hybrid** (bot plus humans).
+9. **Test:** until App Review, only people with a role on the app (Admin, Developer or Tester) can chat with the bot. Add your testers there.
+10. **Go public:** request **Advanced Access** for `pages_messaging` with a screencast of a real conversation. Meta asks for Business Verification for Advanced Access.
 
-**While observing:**
+### Rules BS follows, and what you must do too
 
-| To | Go to |
+| Rule | How it is handled |
 | --- | --- |
-| Read conversations and tokens used | `/admin/users` |
-| Change how BS talks | System prompt under **বার্তা ও মূল্য** (no restart) |
-| Change questions, weights, timers | **প্রশ্ন**, **ম্যাচিং সেটিংস** (no restart) |
-| Stop replies at once | **BS বিরতি দিন** on `/admin/whatsapp`; held messages are answered on resume |
-| See failed runs | Inngest at `http://localhost:8288` |
-| See OpenWA's own dashboard | `http://localhost:2785` |
+| 24-hour window | Free-form messages only within 24h of the person's last message. Outside it, only approved **utility templates** set under **বার্তা ও মূল্য**; empty means nothing is sent. The old message tags stopped working in April 2026. |
+| No promotion outside the window | Utility templates are for payment and account status only. New-match alerts are deliberately not sent outside the window, so BS asks people to check in. |
+| No financial account numbers | BS asks only for the bKash Transaction ID, plus the last 4 digits if offered. A full number someone types is cut to 4 digits when stored. |
+| Disclose automation | The welcome says BS is an automated AI assistant, and BS says so again when it takes back a conversation from a human. |
+| Human help | "মানুষের সাথে কথা বলতে চাই" or the menu's **মানুষের সাহায্য** goes to the admin inbox. Answer it from the Page inbox. |
+| Human takeover | A reply typed in the Page inbox silences BS for that person (12 hours by default, set on `/admin/channel`). **BS-কে ফিরিয়ে দিন** on the user page ends it early. |
+| Opt-out | STOP erases immediately; the menu's **আমার তথ্য মুছুন** explains it. Meta keeps its own copy of the Messenger thread. |
+| Refused sends | Errors such as outside the window or person unavailable are marked failed and never retried. Only rate limits wait and retry. |
+| Webhook security | Signed with the app secret, and every Graph call carries `appsecret_proof`. |
+| Ads | Matchmaking ads need Meta's dating-ads permission and must target 18+. Click-to-Messenger ads give a 7-day reply window, which BS does not use yet. |
 
-The Mac must stay awake: run `caffeinate -s` in a terminal. Messages that arrive while it is off may not all be recovered.
+**What you must watch:** Meta restricts Pages that get many blocks or reports. Keep messages short and wanted, and respond to Page Support Inbox notices within 7 days.
 
-**What this channel does differently:**
+## Other channels (not in use)
 
-- There is no Meta 24-hour window and no templates, so proactive messages go out as plain text.
-- Sends are capped by OpenWA's pacing, which grows with the session's age. Refused or failed sends stay queued and are retried for 24 hours.
-- A sender whose real number WhatsApp will not reveal is not served, because the number is what the payment flow releases. These show up as `channel.unverified_sender` in the audit log.
-- STOP also erases OpenWA's copy of the chat. It cannot reach the WhatsApp app on the business phone, so clear that chat there too if you want it gone.
+The WhatsApp Cloud API (`CHANNEL=whatsapp`) and OpenWA (`CHANNEL=openwa`, run with `pnpm openwa`) adapters are kept and tested, but switched off. Users keep their records under their channel identity, so switching channels later means people start a new conversation there.
 
-**Moving to a VPS:** follow "Going live" steps 2–5 below with `CHANNEL=openwa`, plus `OPENWA_API_KEY` and `OPENWA_WEBHOOK_SECRET`. The session does not move with the app: scan a fresh QR at `/admin/whatsapp` after deploying. Warning: WhatsApp watches data-centre IPs more closely than home connections, and OpenWA's own docs say so, so expect the risk to go up.
+## Going live (VPS)
 
-## Switching to the official Cloud API
-
-Conversation, matching, payments and data are shared, so this is a configuration change.
-
-1. Complete Meta's setup and get the four message templates approved.
-2. In `.env`, set `CHANNEL=whatsapp` and uncomment the `WHATSAPP_*` block.
-3. Restart the app and register `https://biyeshadi.live/api/whatsapp/webhook` in the Meta app.
-4. Put the template names under **বার্তা ও মূল্য**. Without them, messages outside the 24-hour window are skipped.
-5. Unlink at `/admin/whatsapp` first, then remove the `openwa` service from `docker-compose.yml` and set the repository variable `CHANNEL=whatsapp`.
-
-User records are keyed by each user's own number, so profiles, matches and payments carry over. A number can't be on the Cloud API and linked to OpenWA at once, and the safer plan is to use a different number for each. That means existing users have to message the new number, or be reached there through approved templates.
-
-The tester list applies on the Cloud API too, so check it before going public.
-
-## Going live on the Cloud API
-
-These are also the VPS steps for OpenWA, up to step 5. **Register the webhook in Meta only after step 6 passes.**
+Steps 1–5 apply to every channel. Steps 6–7 are for the WhatsApp Cloud API; for Messenger, follow "Running on Facebook Messenger" above instead.
 
 1. **Try the real LLM.** Add `DEEPSEEK_API_KEY`, then run `LLM_PROVIDER=deepseek pnpm eval:extraction`. Tune the system prompt under **বার্তা ও মূল্য** if it scores under 85%. Rerun `pnpm simulate` with `LLM_PROVIDER=deepseek`: the script was written around the mock's wording, so any differences need reading rather than assuming failure.
 2. **Prepare the VPS.** Copy your SSH key to the server, then run `sudo bash deploy/harden.sh deploy`. Confirm `ssh deploy@server` in a new terminal before closing the old one. Create `/opt/biyeshadi`, owned by `deploy`.
-3. **Create `/opt/biyeshadi/.env`** from `.env.example` with `CHANNEL=whatsapp` (or `openwa`) `LLM_PROVIDER=deepseek TRANSCRIBER=groq STORAGE=r2`, and generate `POSTGRES_PASSWORD`, `AUTH_SECRET`, `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` (`openssl rand -hex 32`). The signing key must be hex.
+3. **Create `/opt/biyeshadi/.env`** from `.env.example` with `CHANNEL=messenger` `LLM_PROVIDER=deepseek TRANSCRIBER=groq STORAGE=r2`, and generate `POSTGRES_PASSWORD`, `AUTH_SECRET`, `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` (`openssl rand -hex 32`). The signing key must be hex.
 4. **Create two private R2 buckets**: media and backups. Add the backup cron from the top of `deploy/backup.sh`, then run it once by hand and restore that dump somewhere to prove it works.
 5. **Deploy.** Add repository secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS` (`ssh-keyscan -H server`) and variable `DEPLOY_ENABLED=true`. Point DNS at the VPS, then push to `main`. For a private repo, the VPS also needs lasting GHCR read access: the workflow's token expires when the job ends. Set `UPTIME_ENABLED=true` afterwards.
 6. **Test number.** Set the bKash number in the admin, add `WHATSAPP_*` for a Meta test number, and take two real phones through the whole flow, including a voice note and a photo.

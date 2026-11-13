@@ -25,7 +25,7 @@ export default async function PaymentsPage() {
               <span className="tabular-nums">৳{p.amount}</span>
             </div>
             <div className="text-sm text-muted-foreground">
-              পাঠিয়েছেন {p.senderWalletNumber ?? "মুছে ফেলা"} · {p.createdAt.toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}
+              {p.senderWalletNumber ? `পাঠানো নম্বরের শেষ ৪: ${p.senderWalletNumber}` : "নম্বরের শেষ ৪ দেওয়া হয়নি"} · {p.createdAt.toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}
               {p.note && ` · ${p.note}`}{p.verifiedBy && ` · ${p.verifiedBy}`}
             </div>
             {p.status === "pending" && (

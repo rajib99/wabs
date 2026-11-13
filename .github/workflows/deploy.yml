@@ -67,8 +67,6 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker compose pull --ignore-buildable app migrate
           docker compose run --rm migrate
-          # Built on the server from the pinned commit. Remove with the openwa service after the Cloud API move.
-          docker compose build openwa
           docker compose up -d --no-build --remove-orphans
           for i in \$(seq 1 30); do
             docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" && { echo healthy; exit 0; }

@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { type ChatMessage, getLLM, type LLMUsage } from "@/lib/ai";
 import { audit } from "@/lib/audit";
+import { getChannel } from "@/lib/channel";
 import { db, schema } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { meetsMinimumAge } from "@/lib/matching/find";
@@ -83,8 +84,12 @@ export async function runAgentTurn(phone: string, messageId: string, text: strin
   }
 
   const bkash = context.payment_info?.bkash_number;
-  let finalText = guardReply(reply?.trim() || (await msg("fallback")), [phone, ...(bkash ? [bkash] : [])]);
+  const [me] = await db().select({ contactPhone: schema.users.contactPhone }).from(schema.users).where(eq(schema.users.phone, phone));
+  let finalText = guardReply(reply?.trim() || (await msg("fallback")), [...(me?.contactPhone ? [me.contactPhone] : []), ...(bkash ? [bkash] : [])]);
 
+  if (turn.profileCompleted && getChannel().enforcesServiceWindow) {
+    finalText = `${finalText}\n\n${await msg("check_in_hint")}`;
+  }
   if (turn.profileCompleted) {
     const [user] = await db().select().from(schema.users).where(eq(schema.users.phone, phone));
     const answers = answersToValues(await loadAnswers(phone));

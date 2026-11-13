@@ -1,5 +1,5 @@
 import { and, asc, eq, gte, isNotNull, lt } from "drizzle-orm";
-import { getChannel, type MediaFile } from "@/lib/channel";
+import { getChannel, type MediaFile, PermanentSendError } from "@/lib/channel";
 import { logger } from "@/lib/logger";
 import { getStorage } from "@/lib/storage";
 import { db, schema } from "@/lib/db";
@@ -19,9 +19,11 @@ export type SendOptions = {
   templateParams?: string[];
   /** Leave the message queued on a send failure instead of throwing. The outbound queue delivers it later. */
   deferOnFailure?: boolean;
+  /** Attach the channel's phone-sharing control, where it has one. */
+  requestPhone?: boolean;
 };
 
-export type SendOutcome = "sent" | "duplicate" | "skipped_window" | "deferred";
+export type SendOutcome = "sent" | "duplicate" | "skipped_window" | "deferred" | "failed";
 
 /** All outbound user messages go through here: 24-hour window, dedupe, and logging. */
 export async function sendToUser(phone: string, text: string, opts: SendOptions & { image?: MediaFile; mediaKey?: string } = {}): Promise<SendOutcome> {
@@ -32,7 +34,7 @@ export async function sendToUser(phone: string, text: string, opts: SendOptions 
 
   let templateName = "";
   if (!inWindow && opts.template) {
-    templateName = (await getSetting<Record<string, string>>("templates"))[opts.template] ?? "";
+    templateName = (await getSetting<Record<string, string>>(channel.templateSettingKey ?? "templates"))[opts.template] ?? "";
   }
   const type = inWindow || !templateName ? (opts.image ? "image" : "text") : "template";
 
@@ -50,7 +52,9 @@ export async function sendToUser(phone: string, text: string, opts: SendOptions 
   }
 
   try {
-    const { waMessageId } = type === "template"
+    const { waMessageId } = opts.requestPhone && channel.requestPhone && type === "text"
+      ? await channel.requestPhone(phone, row.rawText ?? text)
+      : type === "template"
       ? await channel.sendTemplate(phone, templateName, await getSetting<string>("template_language"), opts.templateParams ?? [])
       : opts.image
         ? await channel.sendImage(phone, opts.image, row.rawText ?? text)
@@ -58,6 +62,12 @@ export async function sendToUser(phone: string, text: string, opts: SendOptions 
     await d.update(schema.messages).set({ status: "sent", waMessageId, statusAt: new Date() }).where(eq(schema.messages.id, row.id));
     return "sent";
   } catch (err) {
+    if (err instanceof PermanentSendError) {
+      // Retrying a refused send only adds to the Page's failure record.
+      logger.warn({ err, messageId: row.id }, "send refused permanently");
+      await d.update(schema.messages).set({ status: "failed", statusAt: new Date() }).where(eq(schema.messages.id, row.id));
+      return "failed";
+    }
     if (opts.deferOnFailure && opts.dedupeKey) {
       logger.warn({ err, messageId: row.id }, "send failed: left in the outbound queue");
       return "deferred";

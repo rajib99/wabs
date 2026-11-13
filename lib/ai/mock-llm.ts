@@ -92,9 +92,9 @@ function firstRound(text: string, ctx: AgentContext, lastAssistant: string): Cal
   if (photoReq && (yes || no)) return [{ name: "respond_to_photo_request", args: { request_id: photoReq.request_id, allow: yes } }];
 
   const payable = ctx.active_matches.find((m) => m.payment_open);
-  const wallet = t.match(/01\d{9}/)?.[0];
+  const last4 = (t.match(/01\d{9}/)?.[0] ?? t.match(/\b\d{4}\b/)?.[0])?.slice(-4);
   const trx = t.match(/\b(?=[A-Z0-9]*[A-Z])[A-Z0-9]{8,12}\b/)?.[0];
-  if (payable && wallet && trx) return [{ name: "submit_payment", args: { match_id: payable.match_id, wallet_number: wallet, trx_id: trx } }];
+  if (payable && trx) return [{ name: "submit_payment", args: { match_id: payable.match_id, trx_id: trx, ...(last4 ? { wallet_last4: last4 } : {}) } }];
 
   const turnMatch = ctx.active_matches.find((m) => m.your_turn) ?? ctx.active_matches[0];
   if (turnMatch && /রিপোর্ট|হয়রানি/.test(t)) return [{ name: "report_match", args: { match_id: turnMatch.match_id, reason: text } }];

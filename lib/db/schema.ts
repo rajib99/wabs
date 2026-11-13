@@ -14,10 +14,12 @@ const createdAt = () => ts("created_at").notNull().defaultNow();
 const phoneFk = (name: string) => text(name).notNull().references(() => users.phone, { onDelete: "cascade", onUpdate: "cascade" });
 
 export const users = pgTable("users", {
+  // The channel's identity for this person: E.164 on WhatsApp and the simulator, "fb:<PSID>" on Messenger.
+  // Never shown to other users. The number released after payment is contact_phone.
   phone: text("phone").primaryKey(),
   name: text("name"),
   gender: text("gender"),
-  // new → awaiting_age → awaiting_consent → active; ended_underage, consent_declined, deleted are terminal
+  // new → awaiting_age → awaiting_consent → [awaiting_phone] → active; ended_underage, consent_declined, deleted are terminal
   status: text("status").notNull().default("new"),
   createdByRelation: text("created_by_relation"),
   ageConfirmedAt: ts("age_confirmed_at"),
@@ -26,6 +28,12 @@ export const users = pgTable("users", {
   profileComplete: boolean("profile_complete").notNull().default(false),
   profileCompletedAt: ts("profile_completed_at"),
   lastInboundAt: ts("last_inbound_at"),
+  // E.164 number released to a paid match. Channel-provided numbers are verified; typed ones need an admin.
+  contactPhone: text("contact_phone"),
+  contactPhoneVerified: boolean("contact_phone_verified").notNull().default(false),
+  contactPhoneSource: text("contact_phone_source"), // channel | messenger_profile | typed
+  // A person replied from the Page inbox: BS stays quiet for this user until then.
+  humanUntil: ts("human_until"),
   createdAt: createdAt(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 }, (t) => [
@@ -41,6 +49,8 @@ export const messages = pgTable("messages", {
   transcript: text("transcript"),
   mediaKey: text("media_key"),
   mediaId: text("media_id"),
+  // Set only from the channel's phone-sharing control, never parsed from typed text.
+  sharedPhone: text("shared_phone"),
   mediaMime: text("media_mime"),
   waMessageId: text("wa_message_id").unique(),
   dedupeKey: text("dedupe_key").unique(),
@@ -149,6 +159,7 @@ export const payments = pgTable("payments", {
   matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
   payerPhone: phoneFk("payer_phone"),
   method: text("method").notNull().default("bkash"),
+  // Only the last 4 digits: Meta's policy forbids asking for financial account numbers in messages.
   senderWalletNumber: text("sender_wallet_number"),
   trxId: text("trx_id").notNull().unique(),
   amount: integer("amount").notNull(),

@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Badge, Card, PageTitle } from "@/components/ui/card";
 import { requireRole } from "@/lib/admin-auth";
 import { db, schema } from "@/lib/db";
-import { resolveEscalationAction } from "../actions";
+import { resolveEscalationAction, verifyContactPhoneAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-const KIND: Record<string, string> = { human: "মানুষের সাহায্য", report: "অভিযোগ", refund: "রিফান্ড সিদ্ধান্ত" };
+const KIND: Record<string, string> = { human: "মানুষের সাহায্য", report: "অভিযোগ", refund: "রিফান্ড সিদ্ধান্ত", verify_phone: "নম্বর যাচাই" };
 
 export default async function InboxPage() {
   const { role } = await requireRole("owner", "verifier");
@@ -29,6 +29,9 @@ export default async function InboxPage() {
               <span className="text-sm text-muted-foreground">{e.createdAt.toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}</span>
             </div>
             <p className="whitespace-pre-wrap break-words">{e.reason}</p>
+            {e.status === "open" && e.kind === "verify_phone" && (
+              <form action={verifyContactPhoneAction}><input type="hidden" name="id" value={e.id} /><Button>ফোন করে যাচাই করেছি</Button></form>
+            )}
             {e.status === "open" && (
               <form action={resolveEscalationAction}><input type="hidden" name="id" value={e.id} /><Button variant="outline">সমাধান হয়েছে</Button></form>
             )}

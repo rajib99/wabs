@@ -24,6 +24,7 @@ export async function hardFilteredCandidates(phone: string, gender: string, limi
     WHERE c.phone <> ${phone}
       AND c.gender = ${opposite}
       AND c.status = 'active' AND c.profile_complete AND NOT c.blocked
+      AND c.contact_phone IS NOT NULL AND c.contact_phone_verified
       AND NOT EXISTS (
         SELECT 1 FROM matches m
         WHERE (m.user_a = ${phone} AND m.user_b = c.phone) OR (m.user_a = c.phone AND m.user_b = ${phone})
@@ -61,6 +62,7 @@ export async function findMatches(phone: string): Promise<NewMatch[]> {
   const d = db();
   const [me] = await d.select().from(users).where(eq(users.phone, phone));
   if (!me || me.blocked || me.status !== "active" || !me.profileComplete || !me.gender) return [];
+  if (!me.contactPhone || !me.contactPhoneVerified) return []; // starts once an admin has checked a typed number
 
   const [rules, threshold, dailyLimit, minAges] = await Promise.all([
     getSetting<FieldRule[]>("match_weights"),
@@ -113,6 +115,6 @@ export async function findMatches(phone: string): Promise<NewMatch[]> {
 
 export async function activeUserPhones(): Promise<string[]> {
   const rows = await db().select({ phone: users.phone }).from(users)
-    .where(and(eq(users.status, "active"), eq(users.profileComplete, true), eq(users.blocked, false)));
+    .where(and(eq(users.status, "active"), eq(users.profileComplete, true), eq(users.blocked, false), eq(users.contactPhoneVerified, true)));
   return rows.map((r) => r.phone);
 }

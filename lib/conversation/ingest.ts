@@ -10,7 +10,8 @@ import { db, schema } from "@/lib/db";
 
 /** While testing on a live channel only listed numbers are served. Anyone else leaves no trace in our database. */
 export async function isAllowedSender(phone: string): Promise<boolean> {
-  if (env.channel() === "mock") return true;
+  // Messenger has no number to list; until App Review, Meta itself only lets app testers message the Page.
+  if (env.channel() === "mock" || env.channel() === "messenger") return true;
   if (!(await getSetting<boolean>("live_allowlist_enabled"))) return true;
   return (await getSetting<string[]>("live_allowlist")).includes(phone);
 }
@@ -44,7 +45,11 @@ export async function ingestPayload({ messages, statuses }: ReceivedPayload) {
   for (const m of messages) {
     if (!(await isAllowedSender(m.phone))) continue;
     await d.insert(schema.users)
-      .values({ phone: m.phone, lastInboundAt: m.timestamp })
+      .values({
+        phone: m.phone, lastInboundAt: m.timestamp,
+        // On phone-number channels the identity is a number WhatsApp has verified.
+        ...(m.phone.startsWith("+") ? { contactPhone: m.phone, contactPhoneVerified: true, contactPhoneSource: "channel" } : {}),
+      })
       .onConflictDoUpdate({
         target: schema.users.phone,
         set: { lastInboundAt: sql`GREATEST(${schema.users.lastInboundAt}, ${m.timestamp.toISOString()}::timestamptz)` },
@@ -57,6 +62,7 @@ export async function ingestPayload({ messages, statuses }: ReceivedPayload) {
       rawText: m.text,
       mediaId: m.mediaId,
       mediaMime: m.mediaMime,
+      sharedPhone: m.sharedPhone,
       waMessageId: m.waMessageId,
       createdAt: m.timestamp,
     }).onConflictDoNothing({ target: schema.messages.waMessageId }).returning({ id: schema.messages.id });
@@ -91,4 +97,29 @@ export async function resumeHeldMessages(): Promise<number> {
     await inngest.send({ id: `resume-${r.id}-${stamp}`, name: "wa/message.received", data: { messageId: r.id, phone: r.phone } });
   }
   return rows.length;
+}
+
+/** Messenger read receipts carry a watermark: everything we sent before it has been read. */
+export async function markReadUpTo(phone: string, watermark: Date) {
+  await db().update(schema.messages).set({ status: "read", statusAt: watermark }).where(and(
+    eq(schema.messages.phone, phone), eq(schema.messages.direction, "outbound"),
+    sql`${schema.messages.status} IN ('sent', 'delivered')`, sql`${schema.messages.createdAt} <= ${watermark.toISOString()}::timestamptz`,
+  ));
+}
+
+/**
+ * A message the Page sent. Our own sends are already stored. One typed by a person in the Page inbox is kept in
+ * the transcript and hands the conversation to them for a while, so BS and a human never talk over each other.
+ */
+export async function recordPageEcho(echo: { userKey: string; mid: string; text: string | null; byHuman: boolean; timestamp: Date }) {
+  if (!echo.byHuman) return;
+  const d = db();
+  const [user] = await d.select({ phone: schema.users.phone }).from(schema.users).where(eq(schema.users.phone, echo.userKey));
+  if (!user) return;
+  const hours = await getSetting<number>("human_takeover_hours");
+  await d.update(schema.users).set({ humanUntil: new Date(Date.now() + hours * 3600_000) }).where(eq(schema.users.phone, echo.userKey));
+  await d.insert(schema.messages).values({
+    phone: echo.userKey, direction: "outbound", type: "text", rawText: echo.text, waMessageId: echo.mid, status: "sent", statusAt: echo.timestamp, createdAt: echo.timestamp,
+  }).onConflictDoNothing();
+  await audit("page_inbox", "conversation.human_takeover", "user", echo.userKey, { hours });
 }

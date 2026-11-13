@@ -7,6 +7,7 @@ import { getNextQuestion } from "@/lib/profile";
 import { endUnderage, eraseUser, isRateLimited, isStopCommand, parseAgeGate, parseYesNo, scrubMessages, sendStopConfirmation } from "@/lib/safety";
 import { getSetting, msg } from "@/lib/settings";
 import { getStorage } from "@/lib/storage";
+import { normalizeWalletNumber, toAsciiDigits } from "@/lib/text";
 import { sendToUser } from "./outbound";
 
 const { users, messages } = schema;
@@ -44,6 +45,18 @@ export async function preflight(messageId: string): Promise<NextAction> {
   // Left unprocessed on purpose: resuming the bot answers it. Pre-consent text is scrubbed when that happens.
   if (await getSetting<boolean>("bot_paused")) return "done";
 
+  if (text === "__STOP_INFO__") {
+    await sendToUser(phone, await msg("stop_info"), { dedupeKey: gateKey, deferOnFailure: true });
+    return done();
+  }
+
+  // A person from the Page inbox has this conversation. When their time is up, BS says it is back (disclosure rule).
+  if (user.humanUntil) {
+    if (user.humanUntil.getTime() > Date.now()) return done();
+    await d.update(users).set({ humanUntil: null }).where(eq(users.phone, phone));
+    await sendToUser(phone, await msg("bot_resumed"), { dedupeKey: `botback-${messageId}`, deferOnFailure: true });
+  }
+
   if (await isRateLimited(phone)) {
     const bucket = Math.floor(Date.now() / 60_000);
     await sendToUser(phone, await msg("rate_limited"), { dedupeKey: `ratelimit-${phone}-${bucket}` });
@@ -52,12 +65,13 @@ export async function preflight(messageId: string): Promise<NextAction> {
 
   if (user.status !== "active") {
     // Nothing the user sends is kept until they have agreed to the privacy terms.
-    await scrubMessages(phone);
+    if (!user.consentAt) await scrubMessages(phone);
     if (user.status === "new" || user.status === "consent_declined") {
       await d.update(users).set({ status: "awaiting_age" }).where(eq(users.phone, phone));
       await sendToUser(phone, await msg("welcome_age_gate"), { dedupeKey: gateKey, deferOnFailure: true });
       return done();
     }
+    if (user.status === "awaiting_phone") return contactPhoneStep(m, gateKey, done);
     if (!text) {
       await sendToUser(phone, await msg("voice_before_consent"), { dedupeKey: gateKey, deferOnFailure: true });
       return done();
@@ -87,6 +101,12 @@ export async function preflight(messageId: string): Promise<NextAction> {
       if (answer === "no") {
         await d.update(users).set({ status: "consent_declined" }).where(eq(users.phone, phone));
         await sendToUser(phone, await msg("consent_declined"), { dedupeKey: gateKey, deferOnFailure: true });
+        return done();
+      }
+      if (!user.contactPhone) {
+        // Messenger never tells us a number, and the number is what a paid match receives.
+        await d.update(users).set({ status: "awaiting_phone", consentAt: new Date() }).where(eq(users.phone, phone));
+        await sendToUser(phone, await msg("phone_request"), { dedupeKey: gateKey, deferOnFailure: true, requestPhone: true });
         return done();
       }
       await d.update(users).set({ status: "active", consentAt: new Date() }).where(eq(users.phone, phone));
@@ -167,4 +187,39 @@ export async function embedMessage(messageId: string) {
   const embedding = await getEmbedder().embed(text, "passage");
   await d.insert(schema.messageEmbeddings).values({ messageId, phone: m.phone, embedding }).onConflictDoNothing();
   return true;
+}
+
+/** Accepts a typed Bangladeshi or international number. Returns E.164 or null. */
+export function parseTypedPhone(text: string): string | null {
+  const bd = normalizeWalletNumber(text);
+  if (bd) return `+88${bd}`;
+  const compact = toAsciiDigits(text).replace(/[\s-]/g, "");
+  return /^\+\d{8,15}$/.test(compact) ? compact : null;
+}
+
+/**
+ * The contact number step. A number shared through the channel's own control is taken as verified; a typed
+ * one could be anyone's, so it waits for an admin check before the person can be matched or released.
+ */
+async function contactPhoneStep(m: typeof messages.$inferSelect, gateKey: string, done: () => Promise<NextAction>): Promise<NextAction> {
+  const d = db();
+  const phone = m.phone;
+  const shared = m.sharedPhone;
+  const typed = shared ? null : parseTypedPhone(m.rawText ?? "");
+  if (!shared && !typed) {
+    await sendToUser(phone, await msg("phone_retry"), { dedupeKey: gateKey, deferOnFailure: true, requestPhone: true });
+    return done();
+  }
+  const contactPhone = (shared ?? typed)!;
+  await d.update(users).set({
+    status: "active", contactPhone, contactPhoneVerified: !!shared, contactPhoneSource: shared ? "messenger_profile" : "typed", updatedAt: new Date(),
+  }).where(eq(users.phone, phone));
+  if (!shared) {
+    await d.insert(schema.escalations).values({ phone, kind: "verify_phone", reason: `যোগাযোগ নম্বর যাচাই করুন (ফোন করে নিশ্চিত হন): ${contactPhone}` });
+  }
+  const next = await getNextQuestion(phone);
+  await sendToUser(phone, await msg(shared ? "phone_saved_verified" : "phone_saved_unverified", { question: next?.bengaliText ?? "" }), {
+    dedupeKey: gateKey, deferOnFailure: true,
+  });
+  return done();
 }

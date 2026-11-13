@@ -14,7 +14,7 @@ const secret = z.string().min(1);
 
 export const env = {
   databaseUrl: () => parse("Database", z.object({ DATABASE_URL: secret })).DATABASE_URL,
-  channel: () => parse("Channel", z.object({ CHANNEL: z.enum(["mock", "openwa", "whatsapp"]).default("mock") })).CHANNEL,
+  channel: () => parse("Channel", z.object({ CHANNEL: z.enum(["mock", "messenger", "openwa", "whatsapp"]).default("mock") })).CHANNEL,
   llmProvider: () => parse("LLM", z.object({ LLM_PROVIDER: z.enum(["mock", "deepseek"]).default("deepseek") })).LLM_PROVIDER,
   transcriber: () => parse("Transcriber", z.object({ TRANSCRIBER: z.enum(["mock", "groq"]).default("groq") })).TRANSCRIBER,
   embedder: () => parse("Embedder", z.object({ EMBEDDER: z.enum(["mock", "e5"]).default("e5") })).EMBEDDER,
@@ -49,6 +49,20 @@ export const env = {
         WHATSAPP_GRAPH_BASE_URL: z.string().url().default("https://graph.facebook.com"),
       }),
     ),
+  messenger: () =>
+    parse(
+      "Messenger",
+      z.object({
+        MESSENGER_PAGE_ID: secret,
+        MESSENGER_PAGE_ACCESS_TOKEN: secret,
+        MESSENGER_APP_ID: secret,
+        MESSENGER_APP_SECRET: secret,
+        MESSENGER_VERIFY_TOKEN: z.string().min(16),
+        MESSENGER_GRAPH_VERSION: z.string().default("v27.0"),
+        MESSENGER_GRAPH_BASE_URL: z.string().url().default("https://graph.facebook.com"),
+      }),
+    ),
+  publicUrl: () => (process.env.PUBLIC_URL || "https://biyeshadi.live").replace(/\/$/, ""),
   openwa: () =>
     parse(
       "OpenWA",

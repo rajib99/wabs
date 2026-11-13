@@ -51,8 +51,8 @@ export const TOOL_SCHEMAS = {
     schema: z.object({ is_profile_photo: z.boolean() }),
   },
   submit_payment: {
-    description: "Record bKash payment details the user gave for a match with payment_open=true.",
-    schema: z.object({ match_id: z.string().uuid(), wallet_number: z.string().min(1), trx_id: z.string().min(1) }),
+    description: "Record a bKash Transaction ID the user gave for a match with payment_open=true. wallet_last4 only if the user offered the last 4 digits of the sending number; never ask for a full account number.",
+    schema: z.object({ match_id: z.string().uuid(), trx_id: z.string().min(1), wallet_last4: z.string().optional() }),
   },
   report_match: {
     description: "The user reports or blocks the other party of a match. Closes the match.",
@@ -126,7 +126,7 @@ export async function executeTool(name: ToolName, args: unknown, turn: TurnState
       return confirmProfilePhoto(phone, TOOL_SCHEMAS.confirm_profile_photo.schema.parse(args).is_profile_photo);
     case "submit_payment": {
       const a = TOOL_SCHEMAS.submit_payment.schema.parse(args);
-      return submitPayment(phone, a.match_id, a.wallet_number, a.trx_id);
+      return submitPayment(phone, a.match_id, a.wallet_last4, a.trx_id);
     }
     case "report_match": {
       const a = TOOL_SCHEMAS.report_match.schema.parse(args);

@@ -155,7 +155,7 @@ describe("prompt injection and data isolation", () => {
     await say(new Scripted([{ tools: [
       ["respond_to_match", { match_id: m.id, action: "interested" }],
       ["request_photo", { match_id: m.id }],
-      ["submit_payment", { match_id: m.id, wallet_number: "01712345678", trx_id: "ABCD123456" }],
+      ["submit_payment", { match_id: m.id, trx_id: "ABCD123456" }],
       ["report_match", { match_id: m.id, reason: "x" }],
     ] }, { content: "x" }]), "হ্যাক");
     expect((await getMatch(m.id))!.state).toBe("shown_to_a");

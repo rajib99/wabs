@@ -13,7 +13,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   const q = ((await searchParams).q ?? "").trim();
   const like = `%${q.replace(/[%_\\]/g, "\\$&")}%`;
   const rows = await db().select().from(schema.users)
-    .where(q ? or(ilike(schema.users.phone, like), ilike(schema.users.name, like)) : undefined)
+    .where(q ? or(ilike(schema.users.phone, like), ilike(schema.users.name, like), ilike(schema.users.contactPhone, like)) : undefined)
     .orderBy(desc(schema.users.createdAt)).limit(100);
   return (
     <>
@@ -24,11 +24,11 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       </form>
       <Card className="overflow-x-auto p-0">
         <table className="w-full text-sm">
-          <thead className="bg-muted text-left"><tr><th className="p-2 pl-4">ফোন</th><th className="p-2">নাম</th><th className="p-2">অবস্থা</th><th className="p-2 pr-4">প্রোফাইল</th></tr></thead>
+          <thead className="bg-muted text-left"><tr><th className="p-2 pl-4">আইডি / নম্বর</th><th className="p-2">নাম</th><th className="p-2">অবস্থা</th><th className="p-2 pr-4">প্রোফাইল</th></tr></thead>
           <tbody>
             {rows.map((u) => (
               <tr key={u.phone} className="border-t">
-                <td className="p-2 pl-4"><Link className="underline" href={`/admin/users/${encodeURIComponent(u.phone)}`}>{u.phone}</Link></td>
+                <td className="p-2 pl-4"><Link className="break-all underline" href={`/admin/users/${encodeURIComponent(u.phone)}`}>{u.phone}</Link>{u.contactPhone && u.contactPhone !== u.phone && <div className="text-xs text-muted-foreground">{u.contactPhone}{!u.contactPhoneVerified && " (যাচাই হয়নি)"}</div>}</td>
                 <td className="p-2">{u.name ?? "—"}</td>
                 <td className="p-2"><Badge>{u.status}</Badge>{u.blocked && <Badge className="ml-1">blocked</Badge>}</td>
                 <td className="p-2 pr-4">{u.profileComplete ? "সম্পূর্ণ" : "অসম্পূর্ণ"}</td>

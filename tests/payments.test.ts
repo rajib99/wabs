@@ -19,13 +19,26 @@ const pay = async (matchId: string, phone: string, trx: string) => {
 };
 
 describe("submit_payment", () => {
-  it("validates wallet and transaction formats, accepting Bengali digits", async () => {
+  it("keeps only the last 4 digits of a wallet, never a full account number", async () => {
     const m = await setup();
-    expect(await submitPayment(A, m.id, "12345", "ABCD123456")).toMatchObject({ ok: false });
-    expect(await submitPayment(A, m.id, "01712345678", "bad trx!")).toMatchObject({ ok: false });
+    expect(await submitPayment(A, m.id, "12", "ABCD123456")).toMatchObject({ ok: false });
+    expect(await submitPayment(A, m.id, undefined, "bad trx!")).toMatchObject({ ok: false });
     expect(await submitPayment(A, m.id, "০১৭১২৩৪৫৬৭৮", "abcd123456")).toMatchObject({ ok: true });
     const [p] = await db().select().from(schema.payments);
-    expect(p).toMatchObject({ senderWalletNumber: "01712345678", trxId: "ABCD123456", amount: 300, status: "pending" });
+    expect(p).toMatchObject({ senderWalletNumber: "5678", trxId: "ABCD123456", amount: 300, status: "pending" });
+    expect(JSON.stringify(p)).not.toContain("01712345678");
+  });
+  it("a Transaction ID alone is enough", async () => {
+    const m = await setup();
+    expect(await submitPayment(A, m.id, undefined, "ABCD123456")).toMatchObject({ ok: true });
+    expect((await db().select().from(schema.payments))[0]!.senderWalletNumber).toBeNull();
+  });
+  it("releases the contact number, not the channel identity", async () => {
+    const m = await setup();
+    await db().update(schema.users).set({ contactPhone: "+8801999000111" }).where(eq(schema.users.phone, B));
+    await verifyPayment(await pay(m.id, A, "ABCD123456"), "admin@x");
+    await handleSecondPaymentTimeout(m.id, A);
+    expect(await allOut(A)).toContain("+8801999000111");
   });
   it("rejects reused IDs, across users and matches, and double submission", async () => {
     const m = await setup();

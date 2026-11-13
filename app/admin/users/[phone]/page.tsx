@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { requireRole } from "@/lib/admin-auth";
 import { db, schema } from "@/lib/db";
 import { getStorage } from "@/lib/storage";
-import { eraseUserAction, setBlockedAction } from "../../actions";
+import { endTakeoverAction, eraseUserAction, setBlockedAction, setContactVerifiedAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +33,27 @@ export default async function UserPage({ params }: { params: Promise<{ phone: st
   return (
     <>
       <PageTitle>{user.name ?? phone}</PageTitle>
+      <Card className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>যোগাযোগ নম্বর: <strong>{user.contactPhone ?? "দেওয়া হয়নি"}</strong></span>
+          {user.contactPhone && <Badge>{user.contactPhoneVerified ? "যাচাইকৃত" : "যাচাই হয়নি"}</Badge>}
+          {user.contactPhoneSource && <Badge>{user.contactPhoneSource}</Badge>}
+          {user.contactPhone && (
+            <form action={setContactVerifiedAction} className="ml-auto">
+              <input type="hidden" name="phone" value={phone} /><input type="hidden" name="verified" value={String(!user.contactPhoneVerified)} />
+              <Button variant="outline">{user.contactPhoneVerified ? "যাচাই বাতিল" : "ফোন করে যাচাই করেছি"}</Button>
+            </form>
+          )}
+        </div>
+        {user.humanUntil && user.humanUntil.getTime() > Date.now() && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Page inbox থেকে একজন কথা বলছেন; BS চুপ থাকবে {user.humanUntil.toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })} পর্যন্ত।</span>
+            <form action={endTakeoverAction} className="ml-auto"><input type="hidden" name="phone" value={phone} /><Button variant="outline">BS-কে ফিরিয়ে দিন</Button></form>
+          </div>
+        )}
+      </Card>
       <Card className="flex flex-wrap items-center gap-2">
-        <span>{phone}</span><Badge>{user.status}</Badge>{user.blocked && <Badge>blocked</Badge>}
+        <span className="break-all">{phone}</span><Badge>{user.status}</Badge>{user.blocked && <Badge>blocked</Badge>}
         <form action={setBlockedAction} className="ml-auto">
           <input type="hidden" name="phone" value={phone} /><input type="hidden" name="blocked" value={String(!user.blocked)} />
           <Button variant="outline">{user.blocked ? "আনব্লক" : "ব্লক"}</Button>

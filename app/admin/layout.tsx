@@ -4,7 +4,7 @@ import { logoutAction } from "./actions";
 
 const OWNER_NAV: [string, string][] = [
   ["/admin", "পরিসংখ্যান"], ["/admin/payments", "পেমেন্ট"], ["/admin/inbox", "ইনবক্স"], ["/admin/photos", "ছবি"], ["/admin/users", "ব্যবহারকারী"], ["/admin/matches", "ম্যাচ"],
-  ["/admin/whatsapp", "WhatsApp"], ["/admin/questions", "প্রশ্ন"], ["/admin/settings", "ম্যাচিং সেটিংস"], ["/admin/templates", "বার্তা ও মূল্য"], ["/admin/simulator", "সিমুলেটর"],
+  ["/admin/channel", "চ্যানেল"], ["/admin/questions", "প্রশ্ন"], ["/admin/settings", "ম্যাচিং সেটিংস"], ["/admin/templates", "বার্তা ও মূল্য"], ["/admin/simulator", "সিমুলেটর"],
 ];
 const VERIFIER_NAV: [string, string][] = [["/admin/payments", "পেমেন্ট"], ["/admin/inbox", "ইনবক্স"], ["/admin/photos", "ছবি"]];
 

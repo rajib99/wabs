@@ -21,7 +21,8 @@ const BASE: Record<string, unknown> = {
 export async function makeUser(phone: string, gender: "male" | "female", overrides: Record<string, unknown> = {}, userFields: Partial<typeof schema.users.$inferInsert> = {}) {
   const answers: Record<string, unknown> = { ...BASE, age: gender === "male" ? 28 : 24, gender, ...overrides };
   await db().insert(schema.users).values({
-    phone, gender, status: "active", profileComplete: true, consentAt: new Date(), lastInboundAt: new Date(), profileCompletedAt: new Date(), ...userFields,
+    phone, gender, status: "active", profileComplete: true, consentAt: new Date(), lastInboundAt: new Date(), profileCompletedAt: new Date(),
+    contactPhone: phone.startsWith("+") ? phone : null, contactPhoneVerified: phone.startsWith("+"), contactPhoneSource: "channel", ...userFields,
   });
   await db().insert(schema.profileAnswers).values(Object.entries(answers).map(([questionKey, value]) => ({ phone, questionKey, value, source: "asked", confidence: 0.95 })));
 }
@@ -40,7 +41,9 @@ export async function outbound(phone: string) {
 }
 
 export async function inbound(phone: string, text: string, type = "text", extra: Partial<typeof schema.messages.$inferInsert> = {}) {
-  await db().insert(schema.users).values({ phone, lastInboundAt: new Date() }).onConflictDoUpdate({ target: schema.users.phone, set: { lastInboundAt: new Date() } });
+  // Mirrors ingest: on phone-number channels the identity is a verified contact number.
+  const contact = phone.startsWith("+") ? { contactPhone: phone, contactPhoneVerified: true, contactPhoneSource: "channel" } : {};
+  await db().insert(schema.users).values({ phone, lastInboundAt: new Date(), ...contact }).onConflictDoUpdate({ target: schema.users.phone, set: { lastInboundAt: new Date() } });
   const [m] = await db().insert(schema.messages).values({ phone, direction: "inbound", type, rawText: text, waMessageId: `wa-${crypto.randomUUID()}`, ...extra }).returning();
   return m!;
 }

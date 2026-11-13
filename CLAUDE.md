@@ -9,14 +9,15 @@ Rules:
 - Any work over a few seconds runs as an Inngest function with steps.
 - Put the LLM and transcriber behind interfaces (`LLMProvider`, `Transcriber`) so providers can be swapped by env.
 - Build so the app runs end-to-end with no third-party secrets except DATABASE_URL and the LLM key: use a MockChannelAdapter, an /admin/simulator chat page, and a local file store in development, all selected by env vars; validate each secret only when its feature is first used.
-- The user's WhatsApp number (E.164) is the primary identifier everywhere.
+- `users.phone` is the channel identity: E.164 on WhatsApp and the simulator, `fb:<PSID>` on Messenger. The number released after payment is always `users.contact_phone`, and only when `contact_phone_verified`. Never treat typed text as a verified number.
 - All user-facing text is Bengali.
 - The LLM never decides matches; deterministic code does.
 - Never send one user's phone number to another except through the payment flow.
+- Follow the channel's messaging rules: no free-form sends outside its window (Messenger: 24h, then only approved non-promotional utility templates); never ask for full financial account numbers; never retry a send the platform refused (`PermanentSendError`).
 - All config (questions, weights, thresholds, prices, messages) lives in the database and is editable from the admin panel, never hard-coded.
 
 ## Channels
-`CHANNEL` selects the adapter behind `ChannelAdapter`: `mock` (simulator), `openwa` (interim, unofficial gateway via `pnpm openwa`), `whatsapp` (official Cloud API, target once Meta approves). Conversation, matching and payment code must stay channel-agnostic: anything specific to one channel goes in its adapter or behind a capability such as `enforcesServiceWindow`. Identity must come from the channel, never from text a user typed.
+`CHANNEL` selects the adapter behind `ChannelAdapter`: `mock` (simulator), `messenger` (Facebook Messenger, the live channel), and, kept but not in use, `whatsapp` (Cloud API) and `openwa` (unofficial gateway via `pnpm openwa`). Conversation, matching and payment code must stay channel-agnostic: anything specific to one channel goes in its adapter or behind a capability such as `enforcesServiceWindow`. Identity must come from the channel, never from text a user typed.
 
 ## Commands
 - `pnpm db:migrate && pnpm db:seed` — set up the database

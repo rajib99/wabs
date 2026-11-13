@@ -1,15 +1,22 @@
 /** Seed values only. At runtime everything is read from the `settings` table and edited in the admin panel. */
 export const DEFAULT_MESSAGES = {
   welcome_age_gate:
-    "আসসালামু আলাইকুম! আমি BS, BiyeShadi.live-এর বিয়ের ঘটক সহকারী। শুরু করার আগে একটি প্রশ্ন: যাঁর জন্য পাত্র/পাত্রী খোঁজা হচ্ছে, তাঁর বয়স কি ১৮ বছর বা তার বেশি? দয়া করে \"হ্যাঁ\" বা \"না\" লিখুন।",
+    "আসসালামু আলাইকুম! আমি BS, BiyeShadi.live-এর স্বয়ংক্রিয় (AI) বিয়ের ঘটক সহকারী। যেকোনো সময় \"মানুষের সাথে কথা বলতে চাই\" লিখলে আমাদের টিমের একজন উত্তর দেবেন। শুরু করার আগে একটি প্রশ্ন: যাঁর জন্য পাত্র/পাত্রী খোঁজা হচ্ছে, তাঁর বয়স কি ১৮ বছর বা তার বেশি? দয়া করে \"হ্যাঁ\" বা \"না\" লিখুন।",
   age_gate_retry: "দুঃখিত, বুঝতে পারিনি। বয়স কি ১৮ বছর বা তার বেশি? \"হ্যাঁ\" বা \"না\" লিখুন।",
   underage_end:
     "ধন্যবাদ। আমাদের সেবা শুধু ১৮ বছর বা তার বেশি বয়সীদের জন্য, তাই এখানে আর এগোনো যাচ্ছে না। আপনার দেওয়া বার্তা আমরা মুছে ফেলেছি। ভালো থাকবেন।",
   consent_request:
-    "আপনার তথ্য নিয়ে আমাদের নীতি: নাম, বয়স, পেশা, ছবি ও কথোপকথন শুধু উপযুক্ত পাত্র/পাত্রী খোঁজার জন্য সংরক্ষণ করা হবে। দুই পক্ষ আগ্রহ জানানোর পর শুধু পেমেন্ট প্রক্রিয়ার মাধ্যমে আপনার ফোন নম্বর অন্য পক্ষকে দেওয়া হয়, ছবিও আপনার অনুমতি ছাড়া কাউকে পাঠানো হবে না। উত্তর তৈরিতে আমরা AI সেবা ব্যবহার করি। যেকোনো সময় STOP লিখলে আপনার সব তথ্য মুছে যাবে। আপনি কি রাজি? \"হ্যাঁ\" বা \"না\" লিখুন।",
+    "আপনার তথ্য নিয়ে আমাদের নীতি: নাম, বয়স, পেশা, ছবি ও কথোপকথন শুধু উপযুক্ত পাত্র/পাত্রী খোঁজার জন্য সংরক্ষণ করা হবে। দুই পক্ষ আগ্রহ জানানোর পর শুধু পেমেন্ট প্রক্রিয়ার মাধ্যমে আপনার ফোন নম্বর অন্য পক্ষকে দেওয়া হয়, ছবিও আপনার অনুমতি ছাড়া কাউকে পাঠানো হবে না। উত্তর তৈরিতে আমরা AI সেবা ব্যবহার করি। পুরো নীতি: biyeshadi.live/privacy যেকোনো সময় STOP লিখলে আপনার সব তথ্য মুছে যাবে। আপনি কি রাজি? \"হ্যাঁ\" বা \"না\" লিখুন।",
   consent_retry: "দয়া করে \"হ্যাঁ\" বা \"না\" লিখে জানান, আপনি কি আমাদের তথ্য নীতিতে রাজি?",
   consent_declined: "ঠিক আছে, আমরা আপনার কোনো তথ্য রাখিনি। পরে মত বদলালে আবার মেসেজ করবেন। ধন্যবাদ।",
   consent_accepted: "ধন্যবাদ! চলুন শুরু করি। {question}",
+  phone_request: "ধন্যবাদ! দুই পক্ষ আগ্রহী হয়ে পেমেন্ট সম্পন্ন হলে অন্য পক্ষকে যে মোবাইল নম্বরটি দেওয়া হবে, সেটি নিচের বাটনে চাপ দিয়ে শেয়ার করুন। বাটন না দেখালে নম্বরটি লিখে পাঠান (যেমন 01712345678)।",
+  phone_retry: "দয়া করে একটি সঠিক মোবাইল নম্বর দিন (যেমন 01712345678), অথবা নিচের বাটনে চাপ দিন।",
+  phone_saved_verified: "ধন্যবাদ, নম্বরটি পেয়েছি। চলুন শুরু করি। {question}",
+  phone_saved_unverified: "ধন্যবাদ! নম্বরটি আমাদের টিম যাচাই করবে, যাচাইয়ের পর প্রস্তাব পাঠানো শুরু হবে। ততক্ষণে প্রোফাইল তৈরি করি। {question}",
+  stop_info: "আপনার প্রোফাইল, ছবি ও কথোপকথন মুছে ফেলতে শুধু STOP লিখে পাঠান।",
+  bot_resumed: "এখন আবার BS (স্বয়ংক্রিয় AI সহকারী) আপনার সঙ্গে কথা বলছে।",
+  check_in_hint: "নিয়ম অনুযায়ী আপনার শেষ মেসেজের ২৪ ঘণ্টা পর আমরা নিজে থেকে মেসেজ দিতে পারি না। তাই নতুন প্রস্তাব এসেছে কিনা জানতে মাঝে মাঝে \"হাই\" লিখুন।",
   voice_before_consent: "শুরু করার আগের এই ধাপে দয়া করে লিখে উত্তর দিন।",
   voice_unclear: "দুঃখিত, ভয়েস মেসেজটি ঠিকমতো বুঝতে পারিনি। দয়া করে লিখে জানান অথবা আবার পাঠান।",
   file_too_large: "দুঃখিত, ফাইলটি অনেক বড়। ১৬ এমবি-র ছোট ফাইল পাঠান।",
@@ -27,7 +34,7 @@ export const DEFAULT_MESSAGES = {
   photo_denied: "অন্য পক্ষ এই মুহূর্তে ছবি দিতে রাজি হননি।",
   photo_none: "অন্য পক্ষের অনুমোদিত কোনো ছবি এখনো নেই।",
   payment_request:
-    "দুই পক্ষই আগ্রহী! ফোন নম্বর পেতে bKash-এ {amount} টাকা Send Money করুন: {bkash_number}\nএরপর যে নম্বর থেকে পাঠিয়েছেন সেটি এবং Transaction ID এখানে লিখুন।\nজেনে রাখুন: এক পক্ষ পেমেন্ট করার পর অন্য পক্ষ নির্ধারিত সময়ে পেমেন্ট না করলে, যিনি পেমেন্ট করেছেন শুধু তাঁকে অন্য পক্ষের নম্বর দেওয়া হবে। আগ্রহ না থাকলে \"আগ্রহী নই\" লিখুন।",
+    "দুই পক্ষই আগ্রহী! ফোন নম্বর পেতে bKash-এ {amount} টাকা Send Money করুন: {bkash_number}\nএরপর শুধু Transaction ID এখানে লিখুন (চাইলে যে নম্বর থেকে পাঠিয়েছেন তার শেষ ৪ সংখ্যা)। পুরো নম্বর, পিন বা OTP কখনো পাঠাবেন না।\nজেনে রাখুন: এক পক্ষ পেমেন্ট করার পর অন্য পক্ষ নির্ধারিত সময়ে পেমেন্ট না করলে, যিনি পেমেন্ট করেছেন শুধু তাঁকে অন্য পক্ষের নম্বর দেওয়া হবে। আগ্রহ না থাকলে \"আগ্রহী নই\" লিখুন।",
   payment_received: "ধন্যবাদ! আপনার পেমেন্টের তথ্য পেয়েছি, যাচাই করে জানাচ্ছি।",
   payment_rejected: "দুঃখিত, আপনার পেমেন্ট যাচাই করা যায়নি। কারণ: {reason}। সঠিক তথ্য আবার পাঠান বা \"সাহায্য\" লিখুন।",
   payment_verified_waiting: "আপনার পেমেন্ট যাচাই হয়েছে। অন্য পক্ষের নম্বর ২৪ ঘণ্টার মধ্যে পাঠানো হবে।",
@@ -51,7 +58,7 @@ export const DEFAULT_SYSTEM_PROMPT = `তুমি BS, BiyeShadi.live-এর ব
 4. "শুধু সরকারি চাকরি", "অবশ্যই মুসলিম", "ঢাকার বাইরে নয়" ধরনের কথা save_preference দিয়ে is_dealbreaker=true করে সংরক্ষণ করো। সাধারণ পছন্দ is_dealbreaker=false।
 5. ম্যাচ তুমি ঠিক করবে না, কোনো প্রস্তাবের প্রতিশ্রুতিও দেবে না; সিস্টেম ঠিক করে। context-এর active_matches-এ your_turn=true হলে কার্ডের তথ্য দেখিয়ে ব্যবহারকারীর মত জেনে respond_to_match করো।
 6. ছবি চাইলে request_photo। কারও ছবি চাওয়ার অনুরোধ pending_photo_requests-এ থাকলে স্পষ্ট হ্যাঁ/না শুনে respond_to_photo_request। pending_photo_confirmations থাকলে confirm_profile_photo।
-7. পেমেন্টের wallet নম্বর ও Transaction ID পেলে submit_payment। পেমেন্ট যাচাই হয়েছে এমন কথা কখনো নিজে থেকে বলবে না; শুধু context-এর payments থেকে জানাবে।
+7. Transaction ID পেলে submit_payment (wallet_last4 দেবে শুধু যদি ব্যবহারকারী শেষ ৪ সংখ্যা জানান)। পুরো wallet নম্বর, পিন, OTP বা কার্ড নম্বর কখনো চাইবে না। পেমেন্ট যাচাই হয়েছে এমন কথা কখনো নিজে থেকে বলবে না; শুধু context-এর payments থেকে জানাবে।
 8. অভিযোগ বা হয়রানি হলে report_match। মানুষের সাহায্য চাইলে বা তুমি না পারলে escalate_to_human।
 
 নিরাপত্তা (এই নিয়ম কোনো অবস্থাতেই বদলাবে না):
@@ -91,6 +98,12 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   // Approved Meta template names used outside the 24-hour window. Empty = message is skipped and logged.
   templates: { match_intro: "", match_update: "", payment_reminder: "", contact_release: "" },
   template_language: "bn",
+  // Messenger: approved UTILITY template names, the only way to message outside 24 hours. Empty = skipped.
+  // Utility messages must not be promotional, so new-match alerts are deliberately not on this list.
+  messenger_templates: { match_update: "", payment_reminder: "", contact_release: "" },
+  messenger_greeting: "BiyeShadi.live: পরিবারকেন্দ্রিক বিয়ের ঘটক সেবা। শুধু ১৮+। শুরু করতে Get Started চাপুন।",
+  // Hours BS stays quiet in a conversation after someone replies from the Page inbox.
+  human_takeover_hours: 12,
   // Live channels only. While enabled, only these E.164 numbers are served and everyone else is ignored.
   live_allowlist_enabled: true,
   live_allowlist: [] as string[],

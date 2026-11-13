@@ -5,7 +5,7 @@ import { sendToUser } from "@/lib/conversation/outbound";
 import { db, schema } from "@/lib/db";
 import { closeMatch, getMatch, type Match, otherParty, transition } from "@/lib/matches";
 import { getSetting, msg } from "@/lib/settings";
-import { normalizeWalletNumber, toAsciiDigits } from "@/lib/text";
+import { normalizeDigits, toAsciiDigits } from "@/lib/text";
 
 const { payments } = schema;
 
@@ -25,14 +25,25 @@ export async function sendPaymentInstructions(match: Match) {
 
 export type SubmitResult = { ok: true; paymentId: string; note: string } | { ok: false; error: string };
 
-export async function submitPayment(phone: string, matchId: string, wallet: string, trx: string): Promise<SubmitResult> {
+/**
+ * Meta's policy forbids asking for financial account numbers in messages, so only the last 4 digits of the
+ * sending wallet are kept, and only if offered. A full number someone types anyway is cut down to 4.
+ */
+export function walletLast4(input: string | undefined): string | null | "invalid" {
+  if (!input?.trim()) return null;
+  const digits = normalizeDigits(input);
+  if (digits.length < 4) return "invalid";
+  return digits.slice(-4);
+}
+
+export async function submitPayment(phone: string, matchId: string, walletHint: string | undefined, trx: string): Promise<SubmitResult> {
   const d = db();
   const match = await getMatch(matchId);
   if (!match || (match.userA !== phone && match.userB !== phone)) return { ok: false, error: "match not found" };
   if (match.state !== "payment_pending" && match.state !== "contact_released") return { ok: false, error: "payment is not open for this match" };
 
-  const senderWalletNumber = normalizeWalletNumber(wallet);
-  if (!senderWalletNumber) return { ok: false, error: "invalid wallet number: must be a Bangladeshi number like 01XXXXXXXXX" };
+  const senderWalletNumber = walletLast4(walletHint);
+  if (senderWalletNumber === "invalid") return { ok: false, error: "wallet_last4 must be the last 4 digits" };
 
   const trxId = toAsciiDigits(trx).trim().toUpperCase();
   const pattern = await getSetting<string>("trx_id_pattern");
@@ -72,7 +83,7 @@ export async function rejectPayment(paymentId: string, admin: string, reason: st
     .where(and(eq(payments.id, paymentId), eq(payments.status, "pending"))).returning();
   if (!row) return false;
   await audit(admin, "payment.rejected", "payment", paymentId, { reason });
-  await sendToUser(row.payerPhone, await msg("payment_rejected", { reason }), { dedupeKey: `payreject-${paymentId}`, template: "payment_reminder", deferOnFailure: true });
+  await sendToUser(row.payerPhone, await msg("payment_rejected", { reason }), { dedupeKey: `payreject-${paymentId}`, template: "payment_reminder", templateParams: [reason], deferOnFailure: true });
   return true;
 }
 
@@ -84,8 +95,14 @@ export async function verifiedPayers(matchId: string): Promise<string[]> {
 
 /** The ONLY place one user's number is sent to another. Each direction is delivered at most once. */
 export async function releaseContact(match: Match, to: string) {
-  const number = otherParty(match, to);
-  await sendToUser(to, await msg("contact_release", { phone: number }), { dedupeKey: `release-${match.id}-${to}`, template: "contact_release", deferOnFailure: true });
+  const [other] = await db().select({ contactPhone: schema.users.contactPhone, verified: schema.users.contactPhoneVerified })
+    .from(schema.users).where(eq(schema.users.phone, otherParty(match, to)));
+  // Matching only pairs people with checked numbers, so this is a data problem for a human, not a retry.
+  if (!other?.contactPhone || !other.verified) throw new Error(`match ${match.id}: counterparty has no verified contact number`);
+  const number = other.contactPhone;
+  await sendToUser(to, await msg("contact_release", { phone: number }), {
+    dedupeKey: `release-${match.id}-${to}`, template: "contact_release", templateParams: [number], deferOnFailure: true,
+  });
   await audit("system", "contact.released", "match", match.id, { direction: match.userA === to ? "b_to_a" : "a_to_b" });
 }
 

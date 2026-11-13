@@ -15,6 +15,13 @@
       "when": 1794175544702,
       "tag": "0001_pref_satisfied",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794607912934,
+      "tag": "0002_messenger_contact",
+      "breakpoints": true
     }
   ]
 }

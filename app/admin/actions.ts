@@ -7,7 +7,10 @@ import { AuthError } from "next-auth";
 import { z } from "zod";
 import { signIn, signOut } from "@/auth";
 import { requireRole } from "@/lib/admin-auth";
+import { inngest } from "@/inngest/client";
 import { audit } from "@/lib/audit";
+import { applyMessengerProfile } from "@/lib/channel/messenger";
+import { env } from "@/lib/env";
 import { connectSession, disconnectSession } from "@/lib/channel/openwa-session";
 import { resumeHeldMessages } from "@/lib/conversation/ingest";
 import { db, schema } from "@/lib/db";
@@ -101,7 +104,7 @@ export async function connectWhatsAppAction() {
   const { email } = await requireRole("owner");
   await connectSession();
   await audit(email, "whatsapp.connect");
-  revalidatePath("/admin/whatsapp");
+  revalidatePath("/admin/channel");
 }
 
 export async function disconnectWhatsAppAction(form: FormData) {
@@ -109,7 +112,7 @@ export async function disconnectWhatsAppAction(form: FormData) {
   if (str(form, "confirm") !== "UNLINK") throw new Error('type "UNLINK" to confirm');
   await disconnectSession();
   await audit(email, "whatsapp.disconnect");
-  revalidatePath("/admin/whatsapp");
+  revalidatePath("/admin/channel");
 }
 
 export async function saveAllowlistAction(form: FormData) {
@@ -124,7 +127,7 @@ export async function saveAllowlistAction(form: FormData) {
   await setSetting("live_allowlist", phones);
   await setSetting("live_allowlist_enabled", enabled);
   await audit(email, "whatsapp.allowlist_updated", "settings", "live_allowlist", { count: phones.length, enabled });
-  revalidatePath("/admin/whatsapp");
+  revalidatePath("/admin/channel");
 }
 
 export async function setBotPausedAction(form: FormData) {
@@ -133,7 +136,56 @@ export async function setBotPausedAction(form: FormData) {
   await setSetting("bot_paused", paused);
   await audit(email, paused ? "bot.paused" : "bot.resumed");
   if (!paused) await resumeHeldMessages();
-  revalidatePath("/admin/whatsapp");
+  revalidatePath("/admin/channel");
+}
+
+// ---- Messenger (owner) ----
+export async function applyMessengerSetupAction() {
+  const { email } = await requireRole("owner");
+  await applyMessengerProfile(env.publicUrl());
+  await audit(email, "messenger.profile_applied");
+  revalidatePath("/admin/channel");
+}
+
+export async function saveTakeoverHoursAction(form: FormData) {
+  const { email } = await requireRole("owner");
+  const hours = z.number().min(1).max(168).parse(num(form, "human_takeover_hours"));
+  await setSetting("human_takeover_hours", hours);
+  await audit(email, "settings.takeover_updated", "settings", "human_takeover_hours", { hours });
+  revalidatePath("/admin/channel");
+}
+
+// ---- Contact numbers and takeover (owner; verifier for the inbox check) ----
+/** After phoning the number. Matching starts for this person from here. */
+export async function verifyContactPhoneAction(form: FormData) {
+  const { email } = await requireRole("owner", "verifier");
+  const id = z.string().uuid().parse(str(form, "id"));
+  const [esc] = await db().select().from(schema.escalations).where(eq(schema.escalations.id, id));
+  if (!esc || esc.kind !== "verify_phone") throw new Error("not a phone verification item");
+  await db().update(schema.users).set({ contactPhoneVerified: true, updatedAt: new Date() }).where(eq(schema.users.phone, esc.phone));
+  await db().update(schema.escalations).set({ status: "resolved", resolvedBy: email, resolvedAt: new Date() }).where(eq(schema.escalations.id, id));
+  await audit(email, "contact_phone.verified", "user", esc.phone);
+  await inngest.send({ name: "profile/updated", data: { phone: esc.phone } });
+  revalidatePath("/admin/inbox");
+}
+
+export async function setContactVerifiedAction(form: FormData) {
+  const { email } = await requireRole("owner");
+  const phone = str(form, "phone");
+  const verified = z.enum(["true", "false"]).parse(str(form, "verified")) === "true";
+  await db().update(schema.users).set({ contactPhoneVerified: verified, updatedAt: new Date() }).where(eq(schema.users.phone, phone));
+  await audit(email, verified ? "contact_phone.verified" : "contact_phone.unverified", "user", phone);
+  if (verified) await inngest.send({ name: "profile/updated", data: { phone } });
+  revalidatePath(`/admin/users/${encodeURIComponent(phone)}`);
+}
+
+export async function endTakeoverAction(form: FormData) {
+  const { email } = await requireRole("owner");
+  const phone = str(form, "phone");
+  // In the past rather than null, so BS announces it is back on the next message.
+  await db().update(schema.users).set({ humanUntil: new Date(Date.now() - 1000) }).where(eq(schema.users.phone, phone));
+  await audit(email, "conversation.takeover_ended", "user", phone);
+  revalidatePath(`/admin/users/${encodeURIComponent(phone)}`);
 }
 
 // ---- Question bank (owner) ----
@@ -239,6 +291,7 @@ export async function savePricingAction(form: FormData) {
     rate_limit_per_day: z.number().int().positive().parse(num(form, "rate_limit_per_day")),
     template_language: str(form, "template_language") || "bn",
     templates: Object.fromEntries(["match_intro", "match_update", "payment_reminder", "contact_release"].map((k) => [k, str(form, `template_${k}`)])),
+    messenger_templates: Object.fromEntries(["match_update", "payment_reminder", "contact_release"].map((k) => [k, str(form, `mtemplate_${k}`)])),
   };
   for (const [key, value] of Object.entries(next)) await setSetting(key, value);
   await audit(email, "settings.pricing_updated", "settings", "pricing", next);
