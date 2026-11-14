@@ -64,6 +64,10 @@ jobs:
           set -euo pipefail
           cd /opt/biyeshadi
           export APP_IMAGE="${APP_IMAGE}" MIGRATE_IMAGE="${MIGRATE_IMAGE}"
+          # Record the deployed images in .env so a manual `docker compose up -d` uses them instead of trying to build.
+          sed -i '/^APP_IMAGE=/d;/^MIGRATE_IMAGE=/d' .env
+          [ -z "\$(tail -c1 .env)" ] || echo >> .env
+          printf 'APP_IMAGE=%s\nMIGRATE_IMAGE=%s\n' "${APP_IMAGE}" "${MIGRATE_IMAGE}" >> .env
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker compose pull --ignore-buildable app migrate
           docker compose run --rm migrate
