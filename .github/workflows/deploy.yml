@@ -69,8 +69,12 @@ jobs:
           [ -z "\$(tail -c1 .env)" ] || echo >> .env
           printf 'APP_IMAGE=%s\nMIGRATE_IMAGE=%s\n' "${APP_IMAGE}" "${MIGRATE_IMAGE}" >> .env
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker compose pull --ignore-buildable app migrate
-          docker compose run --rm migrate
+          # No --ignore-buildable: both services have a build section, so it skipped the pull entirely.
+          docker compose pull app migrate
+          # The job's token expires when the job ends; a stale login makes later manual pulls fail with "denied".
+          docker logout ghcr.io
+          # -T and </dev/null: without them this reads the rest of this script from stdin and the job "succeeds" early.
+          docker compose run --rm -T migrate </dev/null
           docker compose up -d --no-build --remove-orphans
           for i in \$(seq 1 30); do
             docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" && { echo healthy; exit 0; }
