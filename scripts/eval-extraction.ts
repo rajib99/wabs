@@ -24,7 +24,7 @@ const questions = await loadQuestions();
 const byKey = new Map(questions.map((q) => [q.key, q]));
 const system = await getSetting<string>("system_prompt");
 const context = JSON.stringify({
-  profile: {}, profile_complete: false, preferences: [], to_confirm: [], active_matches: [], pending_photo_requests: [], pending_photo_confirmations: 0,
+  profile: {}, profile_complete: false, contact_step: null, preferences: [], to_confirm: [], active_matches: [], pending_photo_requests: [], pending_photo_confirmations: 0,
   payments: [], payment_info: null, similar_past_messages: [],
   questions: questions.map((q) => ({ key: q.key, text: q.bengaliText, type: q.fieldType, options: q.options, answered: false })),
 });

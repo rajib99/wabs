@@ -59,6 +59,7 @@ function toInbound(m: OpenWAMessage, phone: string): InboundMessage {
     case "voice":
     case "audio": return { ...base, type: "voice", mediaId: mediaIdOf(chatId, m.id) };
     case "image": return { ...base, type: "image", text: m.body, mediaId: mediaIdOf(chatId, m.id) };
+    case "document": return { ...base, type: "document", mediaId: mediaIdOf(chatId, m.id) };
     default: return { ...base, type: "other" };
   }
 }

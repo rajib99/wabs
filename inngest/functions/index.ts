@@ -2,7 +2,9 @@ import { inngest } from "@/inngest/client";
 import { runAgentTurn } from "@/lib/conversation/agent";
 import { flushOutboundQueue, sendQueued, sendToUser } from "@/lib/conversation/outbound";
 import { drainGatewayEraseQueue } from "@/lib/safety";
-import { askToRetype, embedMessage, handleImage, markProcessed, messageText, preflight, storeMedia, transcribeMessage } from "@/lib/conversation/pipeline";
+import {
+  askToRetype, documentUnreadable, embedMessage, handleImage, markProcessed, messageText, preflight, readDocument, storeMedia, transcribeMessage,
+} from "@/lib/conversation/pipeline";
 import { db, schema } from "@/lib/db";
 import { closeMatch, advanceMatch, getMatch, type MatchState, transition } from "@/lib/matches";
 import { activeUserPhones, findMatches } from "@/lib/matching/find";
@@ -27,16 +29,30 @@ export const waMessageReceived = inngest.createFunction(
     const action = await step.run("preflight", () => preflight(messageId));
     if (action === "done") return { action };
 
-    if (action === "image") {
+    if (action === "image" || action === "document") {
       let stored = false;
       try {
-        stored = await step.run("store-image", () => storeMedia(messageId, "photos"));
+        stored = await step.run("store-image", () => storeMedia(messageId, action === "image" ? "photos" : "documents"));
       } catch {
         await step.run("image-fallback", async () => sendToUser(phone, await msg("fallback"), { dedupeKey: `fallback-${messageId}` }));
         return { action, stored };
       }
-      if (stored) await step.run("handle-image", () => handleImage(messageId));
-      return { action };
+      if (!stored) return { action };
+      // A ready-made biodata (image or PDF) is read and handed to the agent; a picture of a person is a profile photo.
+      let kind: Awaited<ReturnType<typeof readDocument>>;
+      try {
+        kind = await step.run("read-document", () => readDocument(messageId));
+      } catch {
+        kind = action === "image" ? "photo" : "unreadable"; // the reader is down: keep the old photo behaviour
+      }
+      if (kind === "photo") {
+        await step.run("handle-image", () => handleImage(messageId));
+        return { action, kind };
+      }
+      if (kind === "unreadable") {
+        await step.run("document-unreadable", () => documentUnreadable(messageId));
+        return { action, kind };
+      }
     }
 
     if (action === "voice") {
@@ -66,7 +82,7 @@ export const waMessageReceived = inngest.createFunction(
     }
     if (turn) {
       const { replyKey } = turn;
-      await step.run("send-reply", () => sendQueued(replyKey));
+      await step.run("send-reply", () => sendQueued(replyKey, { requestPhone: turn!.requestPhone }));
       if (turn.profileCompleted || turn.profileChanged) {
         await step.sendEvent("profile-event", {
           name: turn.profileCompleted ? "profile/completed" : "profile/updated",

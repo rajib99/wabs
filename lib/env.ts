@@ -17,6 +17,22 @@ export const env = {
   channel: () => parse("Channel", z.object({ CHANNEL: z.enum(["mock", "messenger", "openwa", "whatsapp"]).default("mock") })).CHANNEL,
   llmProvider: () => parse("LLM", z.object({ LLM_PROVIDER: z.enum(["mock", "deepseek"]).default("deepseek") })).LLM_PROVIDER,
   transcriber: () => parse("Transcriber", z.object({ TRANSCRIBER: z.enum(["mock", "groq"]).default("groq") })).TRANSCRIBER,
+  docReader: () => parse("Document reader", z.object({ DOC_READER: z.enum(["mock", "vision"]).default("vision") })).DOC_READER,
+  /** Any OpenAI-compatible vision model. Defaults to Groq with the transcriber's key; Gemini reads Bengali print better. */
+  vision: () => {
+    const cfg = parse(
+      "Vision",
+      z.object({
+        VISION_API_KEY: z.string().optional(),
+        GROQ_API_KEY: z.string().optional(),
+        VISION_BASE_URL: z.string().url().default("https://api.groq.com/openai/v1"),
+        VISION_MODEL: z.string().default("meta-llama/llama-4-scout-17b-16e-instruct"),
+      }),
+    );
+    const apiKey = cfg.VISION_API_KEY || cfg.GROQ_API_KEY;
+    if (!apiKey) throw new Error("Vision is not configured: check VISION_API_KEY (or GROQ_API_KEY)");
+    return { apiKey, baseURL: cfg.VISION_BASE_URL, model: cfg.VISION_MODEL };
+  },
   embedder: () => parse("Embedder", z.object({ EMBEDDER: z.enum(["mock", "e5"]).default("e5") })).EMBEDDER,
   storage: () => parse("Storage", z.object({ STORAGE: z.enum(["local", "r2"]).default("local") })).STORAGE,
   localStorageDir: () => process.env.LOCAL_STORAGE_DIR || ".data/media",

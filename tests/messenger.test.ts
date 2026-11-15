@@ -78,7 +78,7 @@ describe("parsing", () => {
     const sticker = parseMessengerEvent(ev([msg({ attachments: [{ type: "image", payload: { url: "https://scontent.xx.fbcdn.net/s.png", sticker_id: 369239263222822 } }] })])).messages[0]!;
     expect(sticker.type).toBe("other");
     const two = parseMessengerEvent(ev([msg({ attachments: [{ type: "image", payload: { url: "https://scontent.xx.fbcdn.net/1.jpg" } }, { type: "file", payload: { url: "https://cdn.fbsbx.com/f" } }] })])).messages;
-    expect(two.map((m) => [m.type, m.waMessageId])).toEqual([["image", "mid.1#0"], ["other", "mid.1#1"]]);
+    expect(two.map((m) => [m.type, m.waMessageId])).toEqual([["image", "mid.1#0"], ["document", "mid.1#1"]]);
   });
   it("turns menu buttons into text the engine understands", async () => {
     const { parseMessengerEvent } = await mod();
@@ -223,45 +223,66 @@ describe("sending", () => {
 });
 
 describe("contact number step", () => {
-  const consented = () => db().insert(schema.users).values({ phone: KEY, status: "awaiting_phone", consentAt: new Date(), lastInboundAt: new Date() });
+  // Every profile question answered, no number yet: the state right after the last question.
+  const answeredAll = (fields: Partial<typeof schema.users.$inferInsert> = {}) =>
+    makeUser(KEY, "male", {}, { contactPhone: null, contactPhoneVerified: false, contactPhoneSource: null, contactHasWhatsapp: null, ...fields });
   const step = async (text: string, sharedPhone?: string) => {
     const m = await inbound(KEY, text, "text", sharedPhone ? { sharedPhone } : {});
     return (await import("@/lib/conversation/pipeline")).preflight(m.id);
   };
   const user = async () => (await db().select().from(schema.users).where(eq(schema.users.phone, KEY)))[0]!;
 
-  it("consent on Messenger leads to a phone request with the share button", async () => {
+  it("consent leads to the biodata question, not a phone request", async () => {
     await db().insert(schema.users).values({ phone: KEY, status: "awaiting_consent", lastInboundAt: new Date() });
     await step("হ্যাঁ");
-    expect((await user()).status).toBe("awaiting_phone");
-    expect(sends().at(-1).message.quick_replies).toEqual([{ content_type: "user_phone_number" }]);
+    expect((await user()).status).toBe("active");
+    expect(sends().at(-1).message.text).toContain("বায়োডাটা");
+    expect(sends().at(-1).message.quick_replies).toBeUndefined();
   });
-  it("a number from the share button is verified and starts the profile", async () => {
-    await consented();
+  it("while the profile is unfinished a number is just a message for the agent", async () => {
+    await db().insert(schema.users).values({ phone: KEY, status: "active", consentAt: new Date(), lastInboundAt: new Date() });
+    expect(await step("01712345678")).toBe("agent");
+    expect((await user()).contactPhone).toBeNull();
+  });
+  it("a number from the share button is verified, then WhatsApp is asked", async () => {
+    await answeredAll();
     await step("+8801712345678", "+8801712345678");
-    expect(await user()).toMatchObject({ status: "active", contactPhone: "+8801712345678", contactPhoneVerified: true, contactPhoneSource: "messenger_profile" });
+    expect(await user()).toMatchObject({ contactPhone: "+8801712345678", contactPhoneVerified: true, contactPhoneSource: "messenger_profile", contactHasWhatsapp: null });
     expect(await db().select().from(schema.escalations)).toHaveLength(0);
-    expect(sends().at(-1).message.text).toContain("নাম");
+    expect(sends().at(-1).message.text).toContain("WhatsApp");
+    expect(sends().at(-1).message.text).toContain("01712345678");
+  });
+  it("the WhatsApp answer is stored, onboarding ends and matching starts", async () => {
+    await answeredAll({ contactPhone: "+8801712345678", contactPhoneVerified: true, contactPhoneSource: "messenger_profile" });
+    expect(await step("না")).toBe("done");
+    expect((await user()).contactHasWhatsapp).toBe(false);
+    expect(sends().at(-1).message.text).toContain("প্রোফাইল সম্পূর্ণ");
+    expect(sentEvents().some((e) => e.name === "profile/updated" && e.data.phone === KEY)).toBe(true);
   });
   it("a typed number is accepted but must be checked by an admin before matching", async () => {
-    await consented();
+    await answeredAll();
     await step("আমার নম্বর ০১৭১২৩৪৫৬৭৮");
-    expect(await user()).toMatchObject({ status: "active", contactPhone: "+8801712345678", contactPhoneVerified: false, contactPhoneSource: "typed" });
+    expect(await user()).toMatchObject({ contactPhone: "+8801712345678", contactPhoneVerified: false, contactPhoneSource: "typed" });
     const [e] = await db().select().from(schema.escalations);
     expect(e).toMatchObject({ kind: "verify_phone", phone: KEY });
     expect(e!.reason).toContain("+8801712345678");
+    await step("হ্যাঁ");
+    expect((await user()).contactHasWhatsapp).toBe(true);
+    expect(sends().at(-1).message.text).toContain("যাচাই");
+    expect(sentEvents().some((ev) => ev.name === "profile/updated")).toBe(false);
   });
-  it("anything else asks again, with the button", async () => {
-    await consented();
-    await step("জানি না");
-    expect((await user()).status).toBe("awaiting_phone");
+  it("a wrong number asks again with the button; a question goes to the agent", async () => {
+    await answeredAll();
+    expect(await step("০১৭১২৩৪")).toBe("done");
     expect(sends().at(-1).message.quick_replies).toBeTruthy();
+    expect(await step("নম্বর কেন লাগবে?")).toBe("agent");
+    expect((await user()).contactPhone).toBeNull();
   });
-  it("after consent, answers are kept (not scrubbed like pre-consent text)", async () => {
-    await consented();
-    await step("জানি না");
-    const kept = await db().select().from(schema.messages).where(eq(schema.messages.direction, "inbound"));
-    expect(kept[0]!.rawText).toBe("জানি না");
+  it("an unclear WhatsApp answer asks again", async () => {
+    await answeredAll({ contactPhone: "+8801712345678", contactPhoneVerified: true });
+    expect(await step("জানি")).toBe("done");
+    expect(sends().at(-1).message.text).toContain("WhatsApp");
+    expect((await user()).contactHasWhatsapp).toBeNull();
   });
   it("matching waits for a checked number on both sides", async () => {
     await makeUser(KEY, "male", {}, { contactPhone: "+8801712345678", contactPhoneVerified: false });

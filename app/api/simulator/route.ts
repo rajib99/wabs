@@ -22,7 +22,7 @@ async function allowed(req: NextRequest) {
 
 const body = z.object({
   phone: z.string().regex(/^\+\d{8,15}$/),
-  type: z.enum(["text", "voice", "image"]).default("text"),
+  type: z.enum(["text", "voice", "image", "document"]).default("text"),
   text: z.string().max(4000).optional(),
   media_base64: z.string().optional(),
   media_mime: z.string().optional(),

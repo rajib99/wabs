@@ -39,6 +39,7 @@ export default async function UserPage({ params }: { params: Promise<{ phone: st
           <span>যোগাযোগ নম্বর: <strong>{user.contactPhone ?? "দেওয়া হয়নি"}</strong></span>
           {user.contactPhone && <Badge>{user.contactPhoneVerified ? "যাচাইকৃত" : "যাচাই হয়নি"}</Badge>}
           {user.contactPhoneSource && <Badge>{user.contactPhoneSource}</Badge>}
+          {user.contactHasWhatsapp != null && <Badge>{user.contactHasWhatsapp ? "WhatsApp আছে" : "WhatsApp নেই"}</Badge>}
           {user.contactPhone && (
             <ActionForm action={setContactVerifiedAction} className="ml-auto">
               <input type="hidden" name="phone" value={phone} /><input type="hidden" name="verified" value={String(!user.contactPhoneVerified)} />
@@ -106,6 +107,7 @@ export default async function UserPage({ params }: { params: Promise<{ phone: st
             <li key={m.id} className={`max-w-[85%] rounded-lg p-2 text-sm ${m.direction === "inbound" ? "self-start bg-muted" : "self-end border"}`}>
               {m.type === "voice" && m.url && <audio controls preload="none" src={m.url} className="mb-1 w-56 max-w-full" />}
               {m.type === "image" && m.url && <a className="underline" href={m.url}>[ছবি]</a>}
+              {m.type === "document" && m.url && <a className="underline" href={m.url}>[ফাইল]</a>}
               <p className="whitespace-pre-wrap break-words">{m.transcript ?? m.rawText}</p>
               <p className="mt-1 text-xs text-muted-foreground">{m.createdAt.toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}{m.direction === "outbound" && ` · ${m.status}`}{m.usageSeconds != null && ` · ${m.usageSeconds}s`}</p>
             </li>

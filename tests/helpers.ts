@@ -22,7 +22,7 @@ export async function makeUser(phone: string, gender: "male" | "female", overrid
   const answers: Record<string, unknown> = { ...BASE, age: gender === "male" ? 28 : 24, gender, ...overrides };
   await db().insert(schema.users).values({
     phone, gender, status: "active", profileComplete: true, consentAt: new Date(), lastInboundAt: new Date(), profileCompletedAt: new Date(),
-    contactPhone: phone.startsWith("+") ? phone : null, contactPhoneVerified: phone.startsWith("+"), contactPhoneSource: "channel", ...userFields,
+    contactPhone: phone.startsWith("+") ? phone : null, contactPhoneVerified: phone.startsWith("+"), contactPhoneSource: "channel", contactHasWhatsapp: true, ...userFields,
   });
   await db().insert(schema.profileAnswers).values(Object.entries(answers).map(([questionKey, value]) => ({ phone, questionKey, value, source: "asked", confidence: 0.95 })));
 }

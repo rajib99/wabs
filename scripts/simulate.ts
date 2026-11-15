@@ -87,7 +87,9 @@ async function startConsent(phone: string) {
 async function onboard(p: Person, questions: Map<string, string>, firstReply?: string) {
   let reply = firstReply ?? (await startConsent(p.phone));
   for (let i = 0; i < 40; i++) {
-    if (reply.includes("প্রোফাইল সম্পূর্ণ")) return;
+    if (reply.includes("প্রোফাইল সম্পূর্ণ")) return; // after the closing WhatsApp question
+    if (reply.includes("বায়োডাটা") && i === 0) { reply = await say(p.phone, "না"); continue; }
+    if (reply.includes("WhatsApp")) { reply = await say(p.phone, "হ্যাঁ"); continue; }
     const key = [...questions.entries()].find(([, text]) => reply.includes(text))?.[0];
     if (!key) throw new Error(`${p.phone}: unexpected reply: ${reply}`);
     reply = await say(p.phone, answerFor(p, key));

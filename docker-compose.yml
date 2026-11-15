@@ -14,6 +14,10 @@ x-app-env: &app-env
   AUTH_URL: https://${DOMAIN:-biyeshadi.live}/api/auth
   DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
   GROQ_API_KEY: ${GROQ_API_KEY:-}
+  DOC_READER: ${DOC_READER:-vision}
+  VISION_API_KEY: ${VISION_API_KEY:-}
+  VISION_BASE_URL: ${VISION_BASE_URL:-https://api.groq.com/openai/v1}
+  VISION_MODEL: ${VISION_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
   MESSENGER_PAGE_ID: ${MESSENGER_PAGE_ID:-}
   MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:-}
   MESSENGER_APP_ID: ${MESSENGER_APP_ID:-}

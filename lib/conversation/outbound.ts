@@ -86,11 +86,11 @@ export async function queueText(phone: string, text: string, dedupeKey: string, 
     .onConflictDoNothing({ target: schema.messages.dedupeKey });
 }
 
-export async function sendQueued(dedupeKey: string): Promise<SendOutcome | "missing"> {
+export async function sendQueued(dedupeKey: string, opts: Pick<SendOptions, "requestPhone"> = {}): Promise<SendOutcome | "missing"> {
   const [row] = await db().select().from(schema.messages).where(eq(schema.messages.dedupeKey, dedupeKey));
   if (!row) return "missing";
   if (row.status !== "queued") return "duplicate";
-  return sendToUser(row.phone, row.rawText ?? "", { dedupeKey });
+  return sendToUser(row.phone, row.rawText ?? "", { dedupeKey, ...opts });
 }
 
 const QUEUE_MIN_AGE_MS = 10 * 60 * 1000; // leaves room for Inngest's own step retries

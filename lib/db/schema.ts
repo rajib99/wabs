@@ -19,7 +19,8 @@ export const users = pgTable("users", {
   phone: text("phone").primaryKey(),
   name: text("name"),
   gender: text("gender"),
-  // new → awaiting_age → awaiting_consent → [awaiting_phone] → active; ended_underage, consent_declined, deleted are terminal
+  // new → awaiting_age → awaiting_consent → active; ended_underage, consent_declined, deleted are terminal.
+  // awaiting_phone is legacy: the contact number is now asked after the profile questions.
   status: text("status").notNull().default("new"),
   createdByRelation: text("created_by_relation"),
   ageConfirmedAt: ts("age_confirmed_at"),
@@ -32,6 +33,8 @@ export const users = pgTable("users", {
   contactPhone: text("contact_phone"),
   contactPhoneVerified: boolean("contact_phone_verified").notNull().default(false),
   contactPhoneSource: text("contact_phone_source"), // channel | messenger_profile | typed
+  // Asked right after the contact number; null until answered.
+  contactHasWhatsapp: boolean("contact_has_whatsapp"),
   // A person replied from the Page inbox: BS stays quiet for this user until then.
   humanUntil: ts("human_until"),
   createdAt: createdAt(),

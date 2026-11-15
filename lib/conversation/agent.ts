@@ -1,20 +1,22 @@
 import { eq } from "drizzle-orm";
 import { type ChatMessage, getLLM, type LLMUsage } from "@/lib/ai";
 import { audit } from "@/lib/audit";
-import { getChannel } from "@/lib/channel";
 import { db, schema } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { meetsMinimumAge } from "@/lib/matching/find";
-import { answersToValues, loadAnswers } from "@/lib/profile";
 import { guardReply, looksLikeInjection } from "@/lib/safety";
 import { getSetting, msg } from "@/lib/settings";
+import { completionNotes, contactQuestion, pendingContactStep } from "./contact";
 import { buildContext, markConfirmationsAsked } from "./context";
 import { queueText } from "./outbound";
 import { executeTool, TOOL_DEFINITIONS, TOOL_SCHEMAS, type ToolName, type TurnState } from "./tools";
 
 const MAX_ROUNDS = 6;
 
-export type TurnResult = { replyKey: string; profileChanged: boolean; profileCompleted: boolean };
+export type TurnResult = {
+  replyKey: string; profileChanged: boolean; profileCompleted: boolean;
+  /** The reply asks for the contact number, so it goes out with the channel's share button. */
+  requestPhone: boolean;
+};
 
 export const replyKey = (messageId: string) => `reply-${messageId}`;
 
@@ -80,25 +82,22 @@ export async function runAgentTurn(phone: string, messageId: string, text: strin
   if (turn.ended === "underage") {
     // The conversation is gone, so this reply is not stored or embedded.
     await queueText(phone, await msg("underage_end"), key, usage);
-    return { replyKey: key, profileChanged: false, profileCompleted: false };
+    return { replyKey: key, profileChanged: false, profileCompleted: false, requestPhone: false };
   }
 
   const bkash = context.payment_info?.bkash_number;
-  const [me] = await db().select({ contactPhone: schema.users.contactPhone }).from(schema.users).where(eq(schema.users.phone, phone));
+  const [me] = await db().select().from(schema.users).where(eq(schema.users.phone, phone));
   let finalText = guardReply(reply?.trim() || (await msg("fallback")), [...(me?.contactPhone ? [me.contactPhone] : []), ...(bkash ? [bkash] : [])]);
 
-  if (turn.profileCompleted && getChannel().enforcesServiceWindow) {
-    finalText = `${finalText}\n\n${await msg("check_in_hint")}`;
-  }
-  if (turn.profileCompleted) {
-    const [user] = await db().select().from(schema.users).where(eq(schema.users.phone, phone));
-    const answers = answersToValues(await loadAnswers(phone));
-    if (!meetsMinimumAge(user?.gender ?? null, answers, await getSetting("min_match_age"))) {
-      finalText = `${finalText}\n\n${await msg("below_legal_age")}`;
-    }
+  // All questions answered: the system itself asks for the contact number, then about WhatsApp.
+  const contactStep = pendingContactStep(me);
+  if (turn.profileCompleted && contactStep) {
+    finalText = `${finalText}\n\n${await contactQuestion(contactStep, me!.contactPhone)}`;
+  } else if (turn.profileCompleted) {
+    finalText = [finalText, ...(await completionNotes(phone))].join("\n\n");
   }
 
   await markConfirmationsAsked(phone, context.to_confirm.map((c) => c.question_key));
   await queueText(phone, finalText, key, usage);
-  return { replyKey: key, profileChanged: turn.profileChanged, profileCompleted: turn.profileCompleted };
+  return { replyKey: key, profileChanged: turn.profileChanged, profileCompleted: turn.profileCompleted, requestPhone: contactStep === "number" };
 }

@@ -42,7 +42,7 @@ export function SimulatorChat() {
     await post({ type: "text", text: t });
   }
 
-  async function sendFile(type: "image" | "voice", file?: File) {
+  async function sendFile(type: "image" | "voice" | "document", file?: File) {
     if (!file) return;
     const bytes = new Uint8Array(await file.arrayBuffer());
     let binary = "";
@@ -70,6 +70,7 @@ export function SimulatorChat() {
       </form>
       <div className="flex flex-wrap gap-4 text-sm">
         <label className="flex items-center gap-2">ছবি<input type="file" accept="image/*" onChange={(e) => void sendFile("image", e.target.files?.[0])} /></label>
+        <label className="flex items-center gap-2">ফাইল (PDF)<input type="file" accept="application/pdf,image/*" onChange={(e) => void sendFile("document", e.target.files?.[0])} /></label>
         <label className="flex items-center gap-2">ভয়েস<input type="file" accept="audio/*" onChange={(e) => void sendFile("voice", e.target.files?.[0])} /></label>
       </div>
     </div>

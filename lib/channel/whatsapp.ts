@@ -17,6 +17,7 @@ type WaMessage = {
   text?: { body: string };
   audio?: { id: string; mime_type?: string };
   image?: { id: string; mime_type?: string; caption?: string };
+  document?: { id: string; mime_type?: string; caption?: string };
   button?: { text: string };
   interactive?: { button_reply?: { title: string }; list_reply?: { title: string } };
 };
@@ -41,7 +42,9 @@ export class WhatsAppCloudAdapter implements ChannelAdapter {
             messages.push({ ...base, type: "text", text: m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? "" });
           } else if (m.type === "audio") messages.push({ ...base, type: "voice", mediaId: m.audio?.id, mediaMime: m.audio?.mime_type });
           else if (m.type === "image") messages.push({ ...base, type: "image", mediaId: m.image?.id, mediaMime: m.image?.mime_type, text: m.image?.caption });
-          else messages.push({ ...base, type: "other" });
+          else if (m.type === "document" && m.document) {
+            messages.push({ ...base, type: "document", mediaId: m.document.id, mediaMime: m.document.mime_type, text: m.document.caption });
+          } else messages.push({ ...base, type: "other" });
         }
         for (const s of change.value?.statuses ?? []) {
           if (s.status === "sent" || s.status === "delivered" || s.status === "read" || s.status === "failed") {

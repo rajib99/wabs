@@ -1,18 +1,19 @@
 import { and, eq } from "drizzle-orm";
-import { getEmbedder, getTranscriber } from "@/lib/ai";
+import { inngest } from "@/inngest/client";
+import { getDocumentReader, getEmbedder, getTranscriber } from "@/lib/ai";
 import { getChannel, MediaTooLargeError } from "@/lib/channel";
 import { db, schema } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { getNextQuestion } from "@/lib/profile";
 import { endUnderage, eraseUser, isRateLimited, isStopCommand, parseAgeGate, parseYesNo, scrubMessages, sendStopConfirmation } from "@/lib/safety";
 import { getSetting, msg } from "@/lib/settings";
 import { getStorage } from "@/lib/storage";
 import { normalizeWalletNumber, toAsciiDigits } from "@/lib/text";
+import { completionNotes, contactQuestion, pendingContactStep } from "./contact";
 import { sendToUser } from "./outbound";
 
 const { users, messages } = schema;
 
-export type NextAction = "agent" | "voice" | "image" | "done";
+export type NextAction = "agent" | "voice" | "image" | "document" | "done";
 
 export async function markProcessed(messageId: string) {
   await db().update(messages).set({ processedAt: new Date() }).where(eq(messages.id, messageId));
@@ -71,7 +72,6 @@ export async function preflight(messageId: string): Promise<NextAction> {
       await sendToUser(phone, await msg("welcome_age_gate"), { dedupeKey: gateKey, deferOnFailure: true });
       return done();
     }
-    if (user.status === "awaiting_phone") return contactPhoneStep(m, gateKey, done);
     if (!text) {
       await sendToUser(phone, await msg("voice_before_consent"), { dedupeKey: gateKey, deferOnFailure: true });
       return done();
@@ -103,31 +103,34 @@ export async function preflight(messageId: string): Promise<NextAction> {
         await sendToUser(phone, await msg("consent_declined"), { dedupeKey: gateKey, deferOnFailure: true });
         return done();
       }
-      if (!user.contactPhone) {
-        // Messenger never tells us a number, and the number is what a paid match receives.
-        await d.update(users).set({ status: "awaiting_phone", consentAt: new Date() }).where(eq(users.phone, phone));
-        await sendToUser(phone, await msg("phone_request"), { dedupeKey: gateKey, deferOnFailure: true, requestPhone: true });
-        return done();
-      }
+      // The first question: is there a ready-made biodata? The contact number comes last, after the profile.
       await d.update(users).set({ status: "active", consentAt: new Date() }).where(eq(users.phone, phone));
-      const next = await getNextQuestion(phone);
-      await sendToUser(phone, await msg("consent_accepted", { question: next?.bengaliText ?? "" }), { dedupeKey: gateKey, deferOnFailure: true });
+      await sendToUser(phone, await msg("biodata_offer"), { dedupeKey: gateKey, deferOnFailure: true });
       return done();
     }
     return done();
   }
 
+  const contactStep = pendingContactStep(user);
+  if (contactStep) {
+    const handled = await contactStepReply(m, user, contactStep, gateKey);
+    if (handled) return done();
+  }
+
   if (m.type === "voice") return "voice";
   if (m.type === "image") return "image";
+  if (m.type === "document") return "document";
   if (m.type === "text" && text.trim()) return "agent";
   await sendToUser(phone, await msg("unsupported_type"), { dedupeKey: gateKey, deferOnFailure: true });
   return done();
 }
 
-const extFor = (mime: string) => (mime.includes("jpeg") ? "jpg" : mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("mpeg") ? "mp3" : "ogg");
+const extFor = (mime: string) =>
+  mime.includes("pdf") ? "pdf" : mime.includes("jpeg") ? "jpg" : mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("mpeg") ? "mp3"
+  : mime.startsWith("audio/") ? "ogg" : "bin";
 
 /** Downloads from the channel and stores privately. Returns false when the file was refused. */
-export async function storeMedia(messageId: string, folder: "voice" | "photos"): Promise<boolean> {
+export async function storeMedia(messageId: string, folder: "voice" | "photos" | "documents"): Promise<boolean> {
   const d = db();
   const [m] = await d.select().from(messages).where(eq(messages.id, messageId));
   if (!m?.mediaId) return false;
@@ -189,37 +192,91 @@ export async function embedMessage(messageId: string) {
   return true;
 }
 
-/** Accepts a typed Bangladeshi or international number. Returns E.164 or null. */
+/** Marks the start of text read from a biodata file, for the agent and the history. */
+export const BIODATA_PREFIX = "[বায়োডাটা]";
+
+/**
+ * Reads an image or file the user sent. A biodata becomes this message's text (like a voice transcript)
+ * and goes to the agent; a photo goes to the profile photo flow. Returns only the kind, never the text.
+ */
+export async function readDocument(messageId: string): Promise<"biodata" | "photo" | "unreadable"> {
+  const d = db();
+  const [m] = await d.select().from(messages).where(eq(messages.id, messageId));
+  if (!m?.mediaKey) return "unreadable";
+  if (m.transcript?.startsWith(BIODATA_PREFIX)) return "biodata"; // a retried step
+  const reading = await getDocumentReader().read(await getStorage().get(m.mediaKey));
+  if (reading.kind === "biodata") {
+    const caption = m.rawText?.trim() ? `${m.rawText.trim()}\n` : "";
+    await d.update(messages).set({ transcript: `${BIODATA_PREFIX}\n${caption}${reading.text}` }).where(eq(messages.id, messageId));
+    return "biodata";
+  }
+  // Any other picture keeps the old behaviour: ask whether it is the profile photo.
+  return m.type === "image" || reading.kind === "photo" ? "photo" : "unreadable";
+}
+
+export async function documentUnreadable(messageId: string) {
+  const [m] = await db().select().from(messages).where(eq(messages.id, messageId));
+  if (!m) return;
+  await sendToUser(m.phone, await msg("document_unreadable"), { dedupeKey: `docunread-${messageId}` });
+  await markProcessed(messageId);
+}
+
+/** Accepts a typed Bangladeshi or international number, alone or inside a sentence. Returns E.164 or null. */
 export function parseTypedPhone(text: string): string | null {
   const bd = normalizeWalletNumber(text);
   if (bd) return `+88${bd}`;
-  const compact = toAsciiDigits(text).replace(/[\s-]/g, "");
+  const ascii = toAsciiDigits(text);
+  const inside = ascii.match(/(?:\+?88[\s-]*)?0[\s-]*1[3-9](?:[\s-]*\d){8}/)?.[0];
+  if (inside) return parseTypedPhone(inside.replace(/[\s-]/g, ""));
+  const compact = ascii.replace(/[\s-]/g, "");
   return /^\+\d{8,15}$/.test(compact) ? compact : null;
 }
 
+const hasManyDigits = (text: string) => (toAsciiDigits(text).match(/\d/g) ?? []).length >= 6;
+
 /**
- * The contact number step. A number shared through the channel's own control is taken as verified; a typed
- * one could be anyone's, so it waits for an admin check before the person can be matched or released.
+ * The last onboarding steps, after every profile question: the contact number, then whether it has WhatsApp.
+ * A number shared through the channel's own control is taken as verified; a typed one could be anyone's, so it
+ * waits for an admin check before the person can be matched or released. Returns false when the message is
+ * something else (a question, say): the agent answers it and reminds them.
  */
-async function contactPhoneStep(m: typeof messages.$inferSelect, gateKey: string, done: () => Promise<NextAction>): Promise<NextAction> {
+async function contactStepReply(
+  m: typeof messages.$inferSelect, user: typeof users.$inferSelect, step: "number" | "whatsapp", gateKey: string,
+): Promise<boolean> {
   const d = db();
   const phone = m.phone;
-  const shared = m.sharedPhone;
-  const typed = shared ? null : parseTypedPhone(m.rawText ?? "");
-  if (!shared && !typed) {
-    await sendToUser(phone, await msg("phone_retry"), { dedupeKey: gateKey, deferOnFailure: true, requestPhone: true });
-    return done();
+  if (m.type !== "text") return false; // a photo, a biodata or a voice note takes its usual path
+  const text = m.rawText ?? "";
+
+  if (step === "number") {
+    const shared = m.sharedPhone;
+    const typed = shared ? null : parseTypedPhone(text);
+    if (!shared && !typed) {
+      if (!hasManyDigits(text)) return false;
+      await sendToUser(phone, await msg("phone_retry"), { dedupeKey: gateKey, deferOnFailure: true, requestPhone: true });
+      return true;
+    }
+    const contactPhone = (shared ?? typed)!;
+    await d.update(users).set({
+      contactPhone, contactPhoneVerified: !!shared, contactPhoneSource: shared ? "messenger_profile" : "typed", contactHasWhatsapp: null, updatedAt: new Date(),
+    }).where(eq(users.phone, phone));
+    if (!shared) {
+      await d.insert(schema.escalations).values({ phone, kind: "verify_phone", reason: `যোগাযোগ নম্বর যাচাই করুন (ফোন করে নিশ্চিত হন): ${contactPhone}` });
+    }
+    await sendToUser(phone, await contactQuestion("whatsapp", contactPhone), { dedupeKey: gateKey, deferOnFailure: true });
+    return true;
   }
-  const contactPhone = (shared ?? typed)!;
-  await d.update(users).set({
-    status: "active", contactPhone, contactPhoneVerified: !!shared, contactPhoneSource: shared ? "messenger_profile" : "typed", updatedAt: new Date(),
-  }).where(eq(users.phone, phone));
-  if (!shared) {
-    await d.insert(schema.escalations).values({ phone, kind: "verify_phone", reason: `যোগাযোগ নম্বর যাচাই করুন (ফোন করে নিশ্চিত হন): ${contactPhone}` });
+
+  const answer = parseYesNo(text);
+  if (answer === "unclear") {
+    if (text.trim().split(/\s+/).length > 3) return false; // a sentence: let the agent answer and ask again
+    await sendToUser(phone, await msg("whatsapp_retry"), { dedupeKey: gateKey, deferOnFailure: true });
+    return true;
   }
-  const next = await getNextQuestion(phone);
-  await sendToUser(phone, await msg(shared ? "phone_saved_verified" : "phone_saved_unverified", { question: next?.bengaliText ?? "" }), {
-    dedupeKey: gateKey, deferOnFailure: true,
-  });
-  return done();
+  await d.update(users).set({ contactHasWhatsapp: answer === "yes", updatedAt: new Date() }).where(eq(users.phone, phone));
+  const done = await msg(user.contactPhoneVerified ? "contact_done" : "contact_done_unverified");
+  await sendToUser(phone, [done, ...(await completionNotes(phone))].join("\n\n"), { dedupeKey: gateKey, deferOnFailure: true });
+  // Matching skipped this person while the number was missing; start it now.
+  if (user.contactPhoneVerified) await inngest.send({ id: `contact-${m.id}`, name: "profile/updated", data: { phone } });
+  return true;
 }

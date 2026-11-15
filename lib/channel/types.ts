@@ -3,7 +3,7 @@ export type InboundMessage = {
   /** Set only by the channel's own phone-sharing control (Messenger's quick reply), never from typed text. */
   sharedPhone?: string;
   phone: string; // E.164 with leading +
-  type: "text" | "voice" | "image" | "other";
+  type: "text" | "voice" | "image" | "document" | "other";
   text?: string;
   mediaId?: string;
   mediaMime?: string;

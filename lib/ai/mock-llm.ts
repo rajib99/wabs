@@ -122,7 +122,7 @@ function finalReply(results: { name: string; result: Record<string, unknown> }[]
   }
   const next = results.find((r) => r.name === "get_next_question")?.result as { questions?: { text: string }[]; profile_complete?: boolean } | undefined;
   if (next?.questions?.length) parts.push(`ধন্যবাদ। ${next.questions[0]!.text}`);
-  else if (next?.profile_complete) parts.push("আপনার প্রোফাইল সম্পূর্ণ হয়েছে, ধন্যবাদ! উপযুক্ত প্রস্তাব পেলে জানাব।");
+  else if (next?.profile_complete) parts.push("সব প্রশ্নের উত্তর পেয়েছি, ধন্যবাদ!");
   return parts.join(" ") || "ধন্যবাদ।";
 }
 

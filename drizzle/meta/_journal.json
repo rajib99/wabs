@@ -22,6 +22,13 @@
       "when": 1794607912934,
       "tag": "0002_messenger_contact",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794762118685,
+      "tag": "0003_contact_last",
+      "breakpoints": true
     }
   ]
 }

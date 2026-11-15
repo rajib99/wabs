@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { matchCardText, otherParty, visibleMatches, cardFields } from "@/lib/matches";
 import { paymentInfo, pendingPaymentsForUser } from "@/lib/payments";
 import { CONFIDENT, isSettled, loadAnswers, loadQuestions } from "@/lib/profile";
+import { type ContactStep, pendingContactStep } from "./contact";
 
 const { messages, preferences, photos, photoRequests } = schema;
 
@@ -14,6 +15,8 @@ const QUERY_EMBED_BUDGET_MS = 2500;
 export type AgentContext = {
   profile: Record<string, { value: unknown; confidence: number }>;
   profile_complete: boolean;
+  /** Set once every question is answered and the system is waiting for the contact number or the WhatsApp answer. */
+  contact_step: ContactStep;
   preferences: { field: string; operator: string; value: unknown; is_dealbreaker: boolean }[];
   questions: { key: string; text: string; type: string; options: unknown; answered: boolean }[];
   to_confirm: { question_key: string; value: unknown }[];
@@ -30,7 +33,7 @@ export type HistoryItem = { role: "user" | "assistant"; content: string };
 export const historyText = (m: { rawText: string | null; transcript: string | null; dedupeKey: string | null; direction: string; type: string }) => {
   // The other party's number was delivered already; it never needs to go back to the LLM.
   if (m.dedupeKey?.startsWith("release-")) return "[অন্য পক্ষের ফোন নম্বর পাঠানো হয়েছে]";
-  return m.transcript ?? m.rawText ?? (m.type === "image" ? "[ছবি]" : null);
+  return m.transcript ?? m.rawText ?? (m.type === "image" ? "[ছবি]" : m.type === "document" ? "[ফাইল]" : null);
 };
 
 export async function loadHistory(phone: string, excludeId: string) {
@@ -92,6 +95,7 @@ export async function buildContext(phone: string, messageId: string, text: strin
   const context: AgentContext = {
     profile: Object.fromEntries(answers.map((a) => [a.questionKey, { value: a.value, confidence: a.confidence }])),
     profile_complete: !!user?.profileComplete,
+    contact_step: pendingContactStep(user),
     preferences: prefs.map((p) => ({ field: p.field, operator: p.operator, value: p.value, is_dealbreaker: p.isDealbreaker })),
     questions: questions.map((q) => ({ key: q.key, text: q.bengaliText, type: q.fieldType, options: q.options, answered: isSettled(byKey.get(q.key)) })),
     to_confirm: answers.filter((a) => a.confidence < CONFIDENT && !a.confirmAskedAt).map((a) => ({ question_key: a.questionKey, value: a.value })),

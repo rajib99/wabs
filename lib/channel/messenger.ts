@@ -89,6 +89,7 @@ export function parseMessengerEvent(payload: unknown, appId?: string): ParsedMes
             const url = a.payload?.url;
             if (a.type === "audio" && url) out.messages.push({ ...base, waMessageId, type: "voice", mediaId: url });
             else if (a.type === "image" && url && !a.payload?.sticker_id) out.messages.push({ ...base, waMessageId, type: "image", mediaId: url, text: m.text });
+            else if (a.type === "file" && url) out.messages.push({ ...base, waMessageId, type: "document", mediaId: url }); // e.g. a biodata PDF
             else out.messages.push({ ...base, waMessageId, type: "other" });
           });
         } else {

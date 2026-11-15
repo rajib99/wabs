@@ -30,6 +30,7 @@ Log in at `/admin`, open **সিমুলেটর**, and chat as any phone num
 | `CHANNEL` | `mock` | `messenger` |
 | `LLM_PROVIDER` | `mock` (rule-based, refused with `CHANNEL=whatsapp`) | `deepseek` |
 | `TRANSCRIBER` | `mock` (looks up `samples/voice/manifest.json`) | `groq` |
+| `DOC_READER` | `mock` (PDF text only; images are treated as photos) | `vision` |
 | `EMBEDDER` | `e5` or `mock` | `e5` |
 | `STORAGE` | `local` | `r2` |
 
@@ -37,7 +38,14 @@ Each secret is checked the first time its feature is used, and the error names w
 
 ## Running on Facebook Messenger
 
-BS talks to people through your Facebook Page. Messenger identifies people by a Page-scoped ID, not a phone number, so after consent BS asks for a contact number using Messenger's "share my number" button. That is the number a paid match receives.
+BS talks to people through your Facebook Page. Messenger identifies people by a Page-scoped ID, not a phone number, so once every profile question is answered BS asks for a contact number using Messenger's "share my number" button, then whether that number has WhatsApp. That is the number a paid match receives.
+
+## Onboarding order
+
+1. 18+ check and privacy consent (deterministic, no AI).
+2. "Do you have a ready-made biodata?" A photo, screenshot or PDF of one is read (`DOC_READER`): PDFs with a text layer are read locally, images go to a remote vision model. The text, with phone numbers removed, goes to the agent, which saves every answer it finds and then asks only what is missing. Scanned PDFs without text get a request for a photo instead.
+3. The remaining profile questions.
+4. The contact number (share button or typed; typed numbers wait for an admin check), then "does this number have WhatsApp?" (`users.contact_has_whatsapp`). Matching starts after this.
 
 - **Shared with the button:** the number comes from the person's Facebook profile and is treated as verified.
 - **Typed instead:** it lands in the admin inbox as **নম্বর যাচাই**. That person is not matched until someone phones the number and presses **ফোন করে যাচাই করেছি**.

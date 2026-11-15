@@ -49,6 +49,8 @@ export async function ingestPayload({ messages, statuses }: ReceivedPayload) {
         phone: m.phone, lastInboundAt: m.timestamp,
         // On phone-number channels the identity is a number WhatsApp has verified.
         ...(m.phone.startsWith("+") ? { contactPhone: m.phone, contactPhoneVerified: true, contactPhoneSource: "channel" } : {}),
+        // A WhatsApp sender's number has WhatsApp. The simulator leaves it open so the question can be tried there.
+        ...(m.phone.startsWith("+") && (env.channel() === "whatsapp" || env.channel() === "openwa") ? { contactHasWhatsapp: true } : {}),
       })
       .onConflictDoUpdate({
         target: schema.users.phone,
