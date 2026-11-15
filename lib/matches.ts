@@ -97,12 +97,14 @@ export async function matchCardText(viewedPhone: string, score: number): Promise
   return msg("match_card", { ...(await cardFields(viewedPhone)), match_percent: toBengaliDigits(Math.round(score)) });
 }
 
-/** Sends the profile card of the counterparty to `viewer`, using a template outside the 24-hour window. */
+/**
+ * Sends the profile card of the counterparty to `viewer`. Outside the 24-hour window the match_intro template
+ * goes instead: a generic alert with no placeholders (a parameter count the template does not have is refused).
+ * The card itself is shown once they reply.
+ */
 export async function showCard(match: Match, viewer: string) {
   const text = await matchCardText(otherParty(match, viewer), match.score);
-  await sendToUser(viewer, text, {
-    dedupeKey: `card-${match.id}-${viewer}`, template: "match_intro", templateParams: [toBengaliDigits(Math.round(match.score))],
-  });
+  await sendToUser(viewer, text, { dedupeKey: `card-${match.id}-${viewer}`, template: "match_intro" });
 }
 
 /** Closes a match. Declined and expired read identically so nobody can tell who declined. */
