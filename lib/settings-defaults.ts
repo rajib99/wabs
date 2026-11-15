@@ -113,8 +113,26 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   templates: { match_intro: "", match_update: "", payment_reminder: "", contact_release: "" },
   template_language: "bn",
   // Messenger: approved UTILITY template names, the only way to message outside 24 hours. Empty = skipped.
-  // Utility messages must not be promotional, so new-match alerts are deliberately not on this list.
-  messenger_templates: { match_update: "", payment_reminder: "", contact_release: "" },
+  // match_intro must be a generic, non-promotional alert with no placeholders and nothing about the other
+  // person ("an update on your proposal request; reply to see it"). The card is shown only once they reply.
+  // If Meta refuses or pauses it, the send falls back to a one-time notification token (below).
+  messenger_templates: { match_intro: "", match_update: "", payment_reminder: "", contact_release: "" },
+  // One-time notifications (Messenger OTN). title: the opt-in card BS shows (max 65 chars). message: the one
+  // later message, kept generic; details are shown after the person replies. enabled: false stops asking.
+  notification_topics: {
+    new_proposal: {
+      enabled: true,
+      title: "\u09a8\u09a4\u09c1\u09a8 \u09aa\u09cd\u09b0\u09b8\u09cd\u09a4\u09be\u09ac \u098f\u09b2\u09c7 \u098f\u0995\u09ac\u09be\u09b0 \u099c\u09be\u09a8\u09bf\u09df\u09c7 \u09a6\u09c7\u09ac",
+      message: "\u0986\u09aa\u09a8\u09be\u09b0 \u099c\u09a8\u09cd\u09af \u098f\u0995\u099f\u09bf \u09a8\u09a4\u09c1\u09a8 \u09aa\u09cd\u09b0\u09b8\u09cd\u09a4\u09be\u09ac \u098f\u09b8\u09c7\u099b\u09c7\u0964 \u09a6\u09c7\u0996\u09a4\u09c7 \u098f\u0996\u09be\u09a8\u09c7 \u09af\u09c7\u0995\u09cb\u09a8\u09cb \u0995\u09bf\u099b\u09c1 \u09b2\u09bf\u0996\u09c1\u09a8\u0964",
+    },
+    proposal_update: {
+      enabled: true,
+      title: "\u09aa\u09cd\u09b0\u09b8\u09cd\u09a4\u09be\u09ac\u09c7\u09b0 \u0996\u09ac\u09b0 \u098f\u09b2\u09c7 \u098f\u0995\u09ac\u09be\u09b0 \u099c\u09be\u09a8\u09bf\u09df\u09c7 \u09a6\u09c7\u09ac",
+      message: "\u0986\u09aa\u09a8\u09be\u09b0 \u09aa\u09cd\u09b0\u09b8\u09cd\u09a4\u09be\u09ac\u09c7 \u09a8\u09a4\u09c1\u09a8 \u0996\u09ac\u09b0 \u0986\u099b\u09c7\u0964 \u099c\u09be\u09a8\u09a4\u09c7 \u098f\u0996\u09be\u09a8\u09c7 \u09af\u09c7\u0995\u09cb\u09a8\u09cb \u0995\u09bf\u099b\u09c1 \u09b2\u09bf\u0996\u09c1\u09a8\u0964",
+    },
+  } as Record<string, { enabled: boolean; title: string; message: string }>,
+  // Meta keeps an OTN token valid for a year.
+  notification_token_ttl_days: 365,
   messenger_greeting: "BiyeShadi.live: পরিবারকেন্দ্রিক বিয়ের ঘটক সেবা। শুধু ১৮+। শুরু করতে Get Started চাপুন।",
   // Hours BS stays quiet in a conversation after someone replies from the Page inbox.
   human_takeover_hours: 12,

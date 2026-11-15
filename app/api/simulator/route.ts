@@ -22,7 +22,8 @@ async function allowed(req: NextRequest) {
 
 const body = z.object({
   phone: z.string().regex(/^\+\d{8,15}$/),
-  type: z.enum(["text", "voice", "image", "document"]).default("text"),
+  type: z.enum(["text", "voice", "image", "document", "optin"]).default("text"),
+  topic: z.string().regex(/^[a-z_]+$/).optional(),
   text: z.string().max(4000).optional(),
   media_base64: z.string().optional(),
   media_mime: z.string().optional(),
@@ -32,7 +33,13 @@ export async function POST(req: NextRequest) {
   if (!(await allowed(req))) return new NextResponse("forbidden", { status: 403 });
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
-  const { phone, type, text, media_base64, media_mime } = parsed.data;
+  const { phone, type, text, media_base64, media_mime, topic } = parsed.data;
+  if (type === "optin") {
+    // The simulated "Notify me" tap on a one-time-notification request.
+    if (!topic) return NextResponse.json({ error: "topic required" }, { status: 400 });
+    await ingestPayload({ messages: [], statuses: [], optins: [{ phone, topic, token: `sim-otn-${randomUUID()}`, timestamp: new Date() }] });
+    return NextResponse.json({ ok: true });
+  }
   let mediaId: string | undefined;
   if (media_base64) {
     mediaId = randomUUID();

@@ -16,7 +16,10 @@ export type StatusUpdate = {
   timestamp: Date;
 };
 
-export type ReceivedPayload = { messages: InboundMessage[]; statuses: StatusUpdate[] };
+/** A person agreed to one later message on a topic (Messenger One-Time Notification). The token is single use. */
+export type NotificationOptin = { phone: string; topic: string; token: string; expiresAt?: Date; timestamp: Date };
+
+export type ReceivedPayload = { messages: InboundMessage[]; statuses: StatusUpdate[]; optins?: NotificationOptin[] };
 export type SendResult = { waMessageId: string };
 export type MediaFile = { bytes: Uint8Array; mime: string };
 
@@ -38,6 +41,13 @@ export interface ChannelAdapter {
   sendImage(to: string, image: MediaFile, caption?: string): Promise<SendResult>;
   sendTemplate(to: string, template: string, language: string, params: string[]): Promise<SendResult>;
   downloadMedia(mediaId: string, maxBytes: number): Promise<MediaFile>;
+  /**
+   * One-time notifications: inside the window, ask the person whether we may message them once later about
+   * `topic`; their yes arrives as a NotificationOptin. Absent (both) when the channel has no such thing.
+   */
+  requestNotification?(to: string, topic: string, title: string): Promise<SendResult>;
+  /** Spends a token from a NotificationOptin. Allowed outside the service window. */
+  sendNotification?(to: string, token: string, text: string): Promise<SendResult>;
   /** Removes any copy of the conversation the channel keeps on our side. Absent when it keeps none. */
   eraseConversation?(phone: string): Promise<void>;
 }

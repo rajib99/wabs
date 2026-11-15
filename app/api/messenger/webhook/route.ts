@@ -40,9 +40,9 @@ export async function POST(req: NextRequest) {
     return new NextResponse("invalid json", { status: 400 });
   }
   try {
-    const { messages, statuses, reads, echoes } = parseMessengerEvent(payload, cfg.MESSENGER_APP_ID);
+    const { messages, statuses, reads, echoes, optins } = parseMessengerEvent(payload, cfg.MESSENGER_APP_ID);
     for (const echo of echoes) await recordPageEcho(echo);
-    await ingestPayload({ messages, statuses });
+    await ingestPayload({ messages, statuses, optins });
     for (const r of reads) await markReadUpTo(r.userKey, r.watermark);
   } catch (err) {
     logger.error({ err }, "Messenger webhook ingest failed");

@@ -1,5 +1,6 @@
 import { inngest } from "@/inngest/client";
 import { runAgentTurn } from "@/lib/conversation/agent";
+import { askForNotifications } from "@/lib/conversation/notify";
 import { flushOutboundQueue, sendQueued, sendToUser } from "@/lib/conversation/outbound";
 import { drainGatewayEraseQueue } from "@/lib/safety";
 import {
@@ -83,6 +84,8 @@ export const waMessageReceived = inngest.createFunction(
     if (turn) {
       const { replyKey } = turn;
       await step.run("send-reply", () => sendQueued(replyKey, { requestPhone: turn!.requestPhone }));
+      // A natural pause to ask whether we may message them later (Messenger one-time notifications).
+      await step.run("ask-notify", () => askForNotifications(phone));
       if (turn.profileCompleted || turn.profileChanged) {
         await step.sendEvent("profile-event", {
           name: turn.profileCompleted ? "profile/completed" : "profile/updated",

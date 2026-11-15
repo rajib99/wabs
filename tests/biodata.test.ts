@@ -112,6 +112,6 @@ describe("contact number comes last", () => {
     const m = await inbound(P, "হ্যাঁ");
     expect(await preflight(m.id)).toBe("done");
     expect((await db().select().from(schema.users).where(eq(schema.users.phone, P)))[0]!.contactHasWhatsapp).toBe(true);
-    expect((await outbound(P)).at(-1)).toContain("প্রোফাইল সম্পূর্ণ");
+    expect((await outbound(P)).at(-2)).toContain("প্রোফাইল সম্পূর্ণ");
   });
 });

@@ -7,6 +7,7 @@ import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { getSetting, msg } from "@/lib/settings";
 import { db, schema } from "@/lib/db";
+import { storeOptin } from "./notification-tokens";
 
 /** While testing on a live channel only listed numbers are served. Anyone else leaves no trace in our database. */
 export async function isAllowedSender(phone: string): Promise<boolean> {
@@ -40,7 +41,7 @@ const STATUS_RANK: Record<string, number> = { queued: 0, sent: 1, delivered: 2, 
  * The only work done in the webhook request: dedupe, persist, and enqueue.
  * Redelivery of an unprocessed message re-sends the event; Inngest dedupes it by event id.
  */
-export async function ingestPayload({ messages, statuses }: ReceivedPayload) {
+export async function ingestPayload({ messages, statuses, optins = [] }: ReceivedPayload) {
   const d = db();
   for (const m of messages) {
     if (!(await isAllowedSender(m.phone))) continue;
@@ -86,6 +87,11 @@ export async function ingestPayload({ messages, statuses }: ReceivedPayload) {
     // Webhook statuses can arrive out of order: never move backwards, except to failed.
     if (s.status !== "failed" && (STATUS_RANK[s.status] ?? 0) <= (STATUS_RANK[row.status] ?? 0)) continue;
     await d.update(schema.messages).set({ status: s.status, statusAt: s.timestamp }).where(eq(schema.messages.id, row.id));
+  }
+
+  for (const o of optins) {
+    if (!(await isAllowedSender(o.phone))) continue;
+    if (await storeOptin(o)) await audit("user", "notification.opted_in", "user", o.phone, { topic: o.topic });
   }
 }
 

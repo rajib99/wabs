@@ -10,6 +10,7 @@ import { getStorage } from "@/lib/storage";
 import { normalizeWalletNumber, toAsciiDigits } from "@/lib/text";
 import { completionNotes, contactQuestion, pendingContactStep } from "./contact";
 import { interpretGateReply } from "./interpret";
+import { askForNotifications } from "./notify";
 import { sendToUser } from "./outbound";
 
 const { users, messages } = schema;
@@ -285,6 +286,7 @@ async function contactStepReply(
   await d.update(users).set({ contactHasWhatsapp: answer === "yes", updatedAt: new Date() }).where(eq(users.phone, phone));
   const done = await msg(user.contactPhoneVerified ? "contact_done" : "contact_done_unverified");
   await sendToUser(phone, [done, ...(await completionNotes(phone))].join("\n\n"), { dedupeKey: gateKey, deferOnFailure: true });
+  await askForNotifications(phone); // onboarding is done: the natural moment to ask about new-proposal alerts
   // Matching skipped this person while the number was missing; start it now.
   if (user.contactPhoneVerified) await inngest.send({ id: `contact-${m.id}`, name: "profile/updated", data: { phone } });
   return true;

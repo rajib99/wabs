@@ -36,6 +36,13 @@
       "when": 1794763797364,
       "tag": "0004_profile_flow",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794779252276,
+      "tag": "0005_notification_tokens",
+      "breakpoints": true
     }
   ]
 }

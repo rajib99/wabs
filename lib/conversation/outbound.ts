@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 import { getStorage } from "@/lib/storage";
 import { db, schema } from "@/lib/db";
 import { getSetting } from "@/lib/settings";
+import { claimToken, notificationTopics, releaseToken, TEMPLATE_TOPIC } from "./notification-tokens";
 
 const WINDOW_MS = 24 * 3600 * 1000;
 
@@ -21,9 +22,78 @@ export type SendOptions = {
   deferOnFailure?: boolean;
   /** Attach the channel's phone-sharing control, where it has one. */
   requestPhone?: boolean;
+  /** Send the text as the channel's one-time-notification opt-in card for this topic, where it has one. */
+  notificationRequest?: string;
 };
 
 export type SendOutcome = "sent" | "duplicate" | "skipped_window" | "deferred" | "failed";
+
+type Row = typeof schema.messages.$inferSelect;
+
+async function markSent(row: Row, waMessageId: string, type?: string) {
+  await db().update(schema.messages).set({ status: "sent", waMessageId, statusAt: new Date(), ...(type ? { type } : {}) }).where(eq(schema.messages.id, row.id));
+}
+
+async function markStatus(row: Row, status: string) {
+  await db().update(schema.messages).set({ status, statusAt: new Date() }).where(eq(schema.messages.id, row.id));
+}
+
+/**
+ * A transient failure: leave it queued (deferOnFailure) or rethrow for Inngest to retry. A dedupe key keeps the
+ * row queued for that retry; without one it is marked failed.
+ */
+async function transientFailure(row: Row, err: unknown, opts: SendOptions): Promise<SendOutcome> {
+  if (opts.deferOnFailure && opts.dedupeKey) {
+    logger.warn({ err, messageId: row.id }, "send failed: left in the outbound queue");
+    return "deferred";
+  }
+  if (!opts.dedupeKey) await markStatus(row, "failed");
+  throw err; // Inngest retries the step
+}
+
+/**
+ * Outside the service window, in order: the approved template; if it is missing or refused, a one-time
+ * notification token on the matching topic; otherwise nothing is sent and the row is kept as skipped_window.
+ * Neither the template nor the notification carries the message itself; the agent shows it once they reply.
+ */
+async function sendOutsideWindow(row: Row, phone: string, opts: SendOptions): Promise<SendOutcome> {
+  const channel = getChannel();
+  if (opts.template) {
+    const name = (await getSetting<Record<string, string>>(channel.templateSettingKey ?? "templates"))[opts.template] ?? "";
+    if (name) {
+      try {
+        const { waMessageId } = await channel.sendTemplate(phone, name, await getSetting<string>("template_language"), opts.templateParams ?? []);
+        await markSent(row, waMessageId, "template");
+        return "sent";
+      } catch (err) {
+        if (!(err instanceof PermanentSendError)) return transientFailure(row, err, opts);
+        // Refused, paused or re-categorised by Meta: never resent. Try the token instead.
+        logger.warn({ err, messageId: row.id, template: opts.template }, "template refused permanently");
+      }
+    }
+  }
+
+  const topic = opts.template ? TEMPLATE_TOPIC[opts.template] : undefined;
+  const text = topic && channel.sendNotification ? (await notificationTopics())[topic]?.message?.trim() : undefined;
+  const claimed = text ? await claimToken(phone, topic!) : undefined;
+  if (claimed) {
+    try {
+      const { waMessageId } = await channel.sendNotification!(phone, claimed.token, text!);
+      await markSent(row, waMessageId, "notification");
+      return "sent";
+    } catch (err) {
+      if (!(err instanceof PermanentSendError)) {
+        await releaseToken(claimed.id);
+        return transientFailure(row, err, opts);
+      }
+      logger.warn({ err, messageId: row.id, topic }, "notification token refused permanently"); // spent or revoked: it stays used
+    }
+  }
+
+  // Meta would reject free-form text here. It stays visible to the agent and the admin.
+  await markStatus(row, "skipped_window");
+  return "skipped_window";
+}
 
 /** All outbound user messages go through here: 24-hour window, dedupe, and logging. */
 export async function sendToUser(phone: string, text: string, opts: SendOptions & { image?: MediaFile; mediaKey?: string } = {}): Promise<SendOutcome> {
@@ -31,12 +101,8 @@ export async function sendToUser(phone: string, text: string, opts: SendOptions 
   const [user] = await d.select({ lastInboundAt: schema.users.lastInboundAt }).from(schema.users).where(eq(schema.users.phone, phone));
   const channel = getChannel();
   const inWindow = !channel.enforcesServiceWindow || inServiceWindow(user?.lastInboundAt ?? null);
-
-  let templateName = "";
-  if (!inWindow && opts.template) {
-    templateName = (await getSetting<Record<string, string>>(channel.templateSettingKey ?? "templates"))[opts.template] ?? "";
-  }
-  const type = inWindow || !templateName ? (opts.image ? "image" : "text") : "template";
+  const optin = inWindow && opts.notificationRequest && channel.requestNotification ? opts.notificationRequest : undefined;
+  const type = optin ? "optin_request" : opts.image ? "image" : "text";
 
   const values = { phone, direction: "outbound", type, rawText: text, mediaKey: opts.mediaKey, dedupeKey: opts.dedupeKey, status: "queued" };
   let [row] = await d.insert(schema.messages).values(values).onConflictDoNothing({ target: schema.messages.dedupeKey }).returning();
@@ -45,35 +111,32 @@ export async function sendToUser(phone: string, text: string, opts: SendOptions 
     if (!row || row.status !== "queued") return "duplicate"; // a previous attempt already finished
   }
 
-  if (!inWindow && !templateName) {
-    // Meta would reject free-form text here. It stays visible to the agent and the admin.
-    await d.update(schema.messages).set({ status: "skipped_window", statusAt: new Date() }).where(eq(schema.messages.id, row.id));
-    return "skipped_window";
+  if (!inWindow) {
+    if (opts.notificationRequest) { // an opt-in card is only allowed inside the window
+      await markStatus(row, "skipped_window");
+      return "skipped_window";
+    }
+    return sendOutsideWindow(row, phone, opts);
   }
 
   try {
-    const { waMessageId } = opts.requestPhone && channel.requestPhone && type === "text"
+    const { waMessageId } = optin
+      ? await channel.requestNotification!(phone, optin, row.rawText ?? text)
+      : opts.requestPhone && channel.requestPhone && !opts.image
       ? await channel.requestPhone(phone, row.rawText ?? text)
-      : type === "template"
-      ? await channel.sendTemplate(phone, templateName, await getSetting<string>("template_language"), opts.templateParams ?? [])
       : opts.image
         ? await channel.sendImage(phone, opts.image, row.rawText ?? text)
         : await channel.sendText(phone, row.rawText ?? text); // a retry sends what was first queued, never a recomputed text
-    await d.update(schema.messages).set({ status: "sent", waMessageId, statusAt: new Date() }).where(eq(schema.messages.id, row.id));
+    await markSent(row, waMessageId);
     return "sent";
   } catch (err) {
     if (err instanceof PermanentSendError) {
       // Retrying a refused send only adds to the Page's failure record.
       logger.warn({ err, messageId: row.id }, "send refused permanently");
-      await d.update(schema.messages).set({ status: "failed", statusAt: new Date() }).where(eq(schema.messages.id, row.id));
+      await markStatus(row, "failed");
       return "failed";
     }
-    if (opts.deferOnFailure && opts.dedupeKey) {
-      logger.warn({ err, messageId: row.id }, "send failed: left in the outbound queue");
-      return "deferred";
-    }
-    if (!opts.dedupeKey) await d.update(schema.messages).set({ status: "failed", statusAt: new Date() }).where(eq(schema.messages.id, row.id));
-    throw err; // Inngest retries the step
+    return transientFailure(row, err, opts);
   }
 }
 

@@ -178,6 +178,7 @@ export async function eraseUser(phone: string, actor = "user") {
     await tx.delete(schema.messages).where(eq(messages.phone, phone));
     await tx.delete(schema.profileAnswers).where(eq(schema.profileAnswers.phone, phone));
     await tx.delete(schema.preferences).where(eq(schema.preferences.phone, phone));
+    await tx.delete(schema.notificationTokens).where(eq(schema.notificationTokens.phone, phone));
     await tx.delete(schema.photos).where(eq(schema.photos.phone, phone));
     await tx.delete(schema.photoRequests).where(or(eq(schema.photoRequests.requester, phone), eq(schema.photoRequests.owner, phone)));
     await tx.update(schema.payments).set({ status: "rejected", note: "user erased" })

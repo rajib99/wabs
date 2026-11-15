@@ -33,6 +33,8 @@ export type HistoryItem = { role: "user" | "assistant"; content: string };
 export const historyText = (m: { rawText: string | null; transcript: string | null; dedupeKey: string | null; direction: string; type: string }) => {
   // The other party's number was delivered already; it never needs to go back to the LLM.
   if (m.dedupeKey?.startsWith("release-")) return "[অন্য পক্ষের ফোন নম্বর পাঠানো হয়েছে]";
+  // Outside the window only a generic alert went out; the user has not seen this message yet.
+  if (m.type === "template" || m.type === "notification") return `[Only a short alert reached the user; NOT yet shown to them: ${m.rawText ?? ""}]`;
   return m.transcript ?? m.rawText ?? (m.type === "image" ? "[ছবি]" : m.type === "document" ? "[ফাইল]" : null);
 };
 

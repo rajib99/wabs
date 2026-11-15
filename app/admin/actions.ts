@@ -13,6 +13,7 @@ import { applyMessengerProfile } from "@/lib/channel/messenger";
 import { env } from "@/lib/env";
 import { connectSession, disconnectSession } from "@/lib/channel/openwa-session";
 import { resumeHeldMessages } from "@/lib/conversation/ingest";
+import { notificationTopics } from "@/lib/conversation/notification-tokens";
 import { db, schema } from "@/lib/db";
 import { rejectPayment, verifyPayment } from "@/lib/payments";
 import { eraseUser } from "@/lib/safety";
@@ -336,7 +337,12 @@ export async function savePricingAction(form: FormData): Promise<ActionResult> {
       rate_limit_per_day: z.number().int().positive().parse(num(form, "rate_limit_per_day")),
       template_language: str(form, "template_language") || "bn",
       templates: Object.fromEntries(["match_intro", "match_update", "payment_reminder", "contact_release"].map((k) => [k, str(form, `template_${k}`)])),
-      messenger_templates: Object.fromEntries(["match_update", "payment_reminder", "contact_release"].map((k) => [k, str(form, `mtemplate_${k}`)])),
+      messenger_templates: Object.fromEntries(["match_intro", "match_update", "payment_reminder", "contact_release"].map((k) => [k, str(form, `mtemplate_${k}`)])),
+      notification_topics: Object.fromEntries(Object.entries(await notificationTopics()).map(([k, t]) => {
+        const title = str(form, `otn_${k}_title`) || t.title;
+        if (title.length > 65) throw new Error(`${k}: title over 65 characters`);
+        return [k, { enabled: form.get(`otn_${k}_enabled`) === "on", title, message: str(form, `otn_${k}_message`) || t.message }];
+      })),
     };
     for (const [key, value] of Object.entries(next)) await setSetting(key, value);
     await audit(email, "settings.pricing_updated", "settings", "pricing", next);

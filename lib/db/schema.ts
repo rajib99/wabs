@@ -47,7 +47,7 @@ export const messages = pgTable("messages", {
   id: uuid("id").primaryKey().defaultRandom(),
   phone: phoneFk("phone"),
   direction: text("direction").notNull(), // inbound | outbound
-  type: text("type").notNull(), // text | voice | image | template | other
+  type: text("type").notNull(), // text | voice | image | template | notification | optin_request | other
   rawText: text("raw_text"),
   transcript: text("transcript"),
   mediaKey: text("media_key"),
@@ -212,3 +212,17 @@ export const escalations = pgTable("escalations", {
   resolvedAt: ts("resolved_at"),
   createdAt: createdAt(),
 }, (t) => [index("escalations_status_idx").on(t.status, t.createdAt)]);
+
+/** Messenger One-Time Notification tokens: each allows one message outside the 24-hour window on its topic. */
+export const notificationTokens = pgTable("notification_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  phone: phoneFk("phone"),
+  topic: text("topic").notNull(), // new_proposal | proposal_update
+  token: text("token").notNull(),
+  expiresAt: ts("expires_at").notNull(),
+  usedAt: ts("used_at"),
+  createdAt: createdAt(),
+}, (t) => [
+  // A newer opt-in replaces the unused token rather than stacking up.
+  uniqueIndex("notification_tokens_one_unused_idx").on(t.phone, t.topic).where(sql`${t.usedAt} IS NULL`),
+]);

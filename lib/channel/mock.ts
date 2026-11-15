@@ -18,6 +18,9 @@ export class MockChannelAdapter implements ChannelAdapter {
   sendText() { return this.result(); }
   sendImage() { return this.result(); }
   sendTemplate() { return this.result(); }
+  // The simulator's opt-in button posts the person's yes back as a NotificationOptin.
+  requestNotification() { return this.result(); }
+  sendNotification() { return this.result(); }
   async downloadMedia(mediaId: string, maxBytes: number): Promise<MediaFile> {
     const file = await getStorage().get(mockMediaKey(mediaId));
     if (file.bytes.byteLength > maxBytes) throw new MediaTooLargeError();

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type Msg = { id: string; direction: string; type: string; text: string | null; status: string };
+type Msg = { id: string; direction: string; type: string; text: string | null; status: string; dedupe_key: string | null };
+
+const optinTopic = (key: string | null) => key?.match(/^otnreq-([a-z_]+)-/)?.[1];
 
 export function SimulatorChat() {
   const [phone, setPhone] = useState("+8801700000001");
@@ -59,6 +61,9 @@ export function SimulatorChat() {
             {m.type !== "text" && <span className="mr-1 text-xs text-muted-foreground">[{m.type}]</span>}
             {m.text}
             {m.status === "skipped_window" && <span className="block text-xs text-muted-foreground">২৪ ঘণ্টার বাইরে: পাঠানো হয়নি</span>}
+            {m.type === "optin_request" && optinTopic(m.dedupe_key) && (
+              <Button type="button" className="mt-2 block" onClick={() => void post({ type: "optin", topic: optinTopic(m.dedupe_key) })}>Notify me</Button>
+            )}
           </li>
         ))}
         <li ref={end} aria-hidden />

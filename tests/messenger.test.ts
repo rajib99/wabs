@@ -256,7 +256,9 @@ describe("contact number step", () => {
     await answeredAll({ contactPhone: "+8801712345678", contactPhoneVerified: true, contactPhoneSource: "messenger_profile" });
     expect(await step("না")).toBe("done");
     expect((await user()).contactHasWhatsapp).toBe(false);
-    expect(sends().at(-1).message.text).toContain("প্রোফাইল সম্পূর্ণ");
+    expect(sends().at(-2).message.text).toContain("প্রোফাইল সম্পূর্ণ");
+    // Onboarding done: the natural pause to ask for a new-proposal alert.
+    expect(sends().at(-1).message.attachment.payload).toMatchObject({ template_type: "one_time_notif_req", payload: "OTN:new_proposal" });
     expect(sentEvents().some((e) => e.name === "profile/updated" && e.data.phone === KEY)).toBe(true);
   });
   it("a typed number is accepted but must be checked by an admin before matching", async () => {
@@ -268,7 +270,7 @@ describe("contact number step", () => {
     expect(e!.reason).toContain("+8801712345678");
     await step("হ্যাঁ");
     expect((await user()).contactHasWhatsapp).toBe(true);
-    expect(sends().at(-1).message.text).toContain("যাচাই");
+    expect(sends().at(-2).message.text).toContain("যাচাই");
     expect(sentEvents().some((ev) => ev.name === "profile/updated")).toBe(false);
   });
   it("a wrong number asks again with the button; a question goes to the agent", async () => {
@@ -342,5 +344,146 @@ describe("release on Messenger", () => {
   it("the LLM reply guard allows the user's own contact number only", async () => {
     const { guardReply } = await import("@/lib/safety");
     expect(guardReply("আপনার নম্বর +8801712345678, ওনার 01812345678", ["+8801712345678"])).toBe("আপনার নম্বর +8801712345678, ওনার [গোপন]");
+  });
+});
+
+describe("one-time notifications", () => {
+  const OLD = new Date(Date.now() - 48 * 3600_000);
+  const optinEvent = (token: string, payload = "OTN:new_proposal", extra: object = {}) =>
+    ({ sender: { id: PSID }, recipient: { id: "111" }, timestamp: 1_900_000_000_000, optin: { type: "one_time_notif_req", payload, one_time_notif_token: token, ...extra } });
+  const tokens = () => db().select().from(schema.notificationTokens);
+  const giveToken = async (token = "tok-1", topic = "new_proposal", expiresAt = new Date(Date.now() + 86400_000)) =>
+    db().insert(schema.notificationTokens).values({ phone: KEY, topic, token, expiresAt });
+  const out = async () => db().select().from(schema.messages).where(eq(schema.messages.direction, "outbound"));
+  const send = async (key: string, template: string) => (await import("@/lib/conversation/outbound")).sendToUser(KEY, "card text", { dedupeKey: key, template });
+  const refuse = (match: (body: string) => boolean) => {
+    handler = (q, body) => (q.url?.startsWith("/v27.0/me/messages") && match(body) ? { status: 400, json: { error: { code: 100, message: "template paused" } } } : undefined);
+  };
+
+  it("parses an opt-in, keeping the topic, token and expiry; ignores anything else", async () => {
+    const { parseMessengerEvent } = await mod();
+    const { optins } = parseMessengerEvent(ev([
+      optinEvent("t1", "OTN:new_proposal", { token_expiry_timestamp: 1_950_000_000_000 }),
+      optinEvent("t2", "SOMETHING_ELSE"),
+      { ...optinEvent("t3"), optin: { type: "one_time_notif_req", payload: "OTN:new_proposal" } },
+      { ...optinEvent("t4"), optin: { type: "notification_messages", payload: "OTN:new_proposal", one_time_notif_token: "t4" } },
+    ]));
+    expect(optins).toEqual([{ phone: KEY, topic: "new_proposal", token: "t1", timestamp: new Date(1_900_000_000_000), expiresAt: new Date(1_950_000_000_000) }]);
+  });
+  it("the webhook stores a token; a newer opt-in replaces the unused one; unknown people and topics are ignored", async () => {
+    expect((await postHook(ev([optinEvent("t1")]))).status).toBe(200);
+    expect(await tokens()).toHaveLength(0); // no such user yet
+    await makeUser(KEY, "male");
+    await postHook(ev([optinEvent("t1"), optinEvent("t2"), optinEvent("t3", "OTN:made_up")]));
+    const rows = await tokens();
+    expect(rows.map((r) => [r.topic, r.token, r.usedAt])).toEqual([["new_proposal", "t2", null]]);
+    expect(rows[0]!.expiresAt.getTime()).toBe(1_900_000_000_000 + 365 * 86400_000);
+  });
+  it("outside the window an approved template wins and the token is kept", async () => {
+    await makeUser(KEY, "male", {}, { lastInboundAt: OLD });
+    await setSetting("messenger_templates", { match_intro: "bs_proposal_alert" });
+    await giveToken();
+    expect(await send("c1", "match_intro")).toBe("sent");
+    expect(sends()).toHaveLength(1);
+    expect(sends()[0].message.template.name).toBe("bs_proposal_alert");
+    expect((await tokens())[0]!.usedAt).toBeNull();
+    expect((await out())[0]).toMatchObject({ type: "template", status: "sent" });
+  });
+  it("a refused template is never retried: the token is spent once instead, then nothing", async () => {
+    await makeUser(KEY, "male", {}, { lastInboundAt: OLD });
+    await setSetting("messenger_templates", { match_intro: "bs_proposal_alert" });
+    await giveToken("tok-9");
+    refuse((b) => b.includes("bs_proposal_alert"));
+    expect(await send("c1", "match_intro")).toBe("sent");
+    const [tpl, otn] = sends();
+    expect(tpl.message.template.name).toBe("bs_proposal_alert");
+    expect(otn.recipient).toEqual({ one_time_notif_token: "tok-9" });
+    expect(otn.message.text).toBeTruthy();
+    expect(otn.message.text).not.toContain("card text"); // generic: the card waits for their reply
+    expect((await tokens())[0]!.usedAt).not.toBeNull();
+    expect((await out())[0]).toMatchObject({ type: "notification", status: "sent" });
+
+    seen.length = 0;
+    expect(await send("c2", "match_intro")).toBe("skipped_window");
+    expect(sends().filter((b) => b.recipient.one_time_notif_token)).toHaveLength(0);
+  });
+  it("with no template the token is used; an expired token is not", async () => {
+    await makeUser(KEY, "male", {}, { lastInboundAt: OLD });
+    await giveToken("expired", "new_proposal", new Date(Date.now() - 1000));
+    expect(await send("c1", "match_intro")).toBe("skipped_window");
+    expect(sends()).toHaveLength(0);
+    await db().delete(schema.notificationTokens);
+    await giveToken("live", "proposal_update");
+    expect(await send("u1", "match_update")).toBe("sent");
+    expect(sends()[0].recipient).toEqual({ one_time_notif_token: "live" });
+  });
+  it("payment and contact sends never fall back to a token", async () => {
+    await makeUser(KEY, "male", {}, { lastInboundAt: OLD });
+    await giveToken("a", "new_proposal");
+    await giveToken("b", "proposal_update");
+    expect(await send("p1", "payment_reminder")).toBe("skipped_window");
+    expect(await send("r1", "contact_release")).toBe("skipped_window");
+    expect(sends()).toHaveLength(0);
+  });
+  it("a transient failure gives the token back for the retry; a refused token stays spent", async () => {
+    await makeUser(KEY, "male", {}, { lastInboundAt: OLD });
+    await giveToken("tok");
+    handler = (q) => (q.url?.startsWith("/v27.0/me/messages") ? { status: 500, json: { error: { code: 2 } } } : undefined);
+    await expect(send("c1", "match_intro")).rejects.toThrow();
+    expect((await tokens())[0]!.usedAt).toBeNull();
+    expect((await out())[0]!.status).toBe("queued");
+
+    refuse(() => true);
+    expect(await send("c1", "match_intro")).toBe("skipped_window");
+    expect((await tokens())[0]!.usedAt).not.toBeNull();
+  });
+  it("asks once per token, inside the window only; asks about updates while waiting on a proposal", async () => {
+    const { askForNotifications } = await import("@/lib/conversation/notify");
+    await makeUser(KEY, "male", {}, { contactPhone: "+8801712345678", contactPhoneVerified: true });
+    expect(await askForNotifications(KEY)).toBe("sent");
+    expect(sends()[0].message.attachment.payload).toMatchObject({ template_type: "one_time_notif_req", payload: "OTN:new_proposal" });
+    expect(sends()[0].message.attachment.payload.title.length).toBeLessThanOrEqual(65);
+    expect(await askForNotifications(KEY)).toBe("none"); // ignored: not asked again
+
+    await makeUser("fb:other", "female");
+    await makeMatch(KEY, "fb:other", "a_interested");
+    expect(await askForNotifications(KEY)).toBe("sent");
+    expect(sends()[1].message.attachment.payload.payload).toBe("OTN:proposal_update");
+
+    // Once the token is given and spent, the next pause asks again.
+    await postHook(ev([optinEvent("t1")]));
+    await db().update(schema.notificationTokens).set({ usedAt: new Date() });
+    seen.length = 0;
+    expect(await askForNotifications(KEY)).toBe("sent");
+    expect(sends()[0].message.attachment.payload.payload).toBe("OTN:new_proposal");
+
+    await db().update(schema.users).set({ lastInboundAt: OLD });
+    await db().delete(schema.notificationTokens);
+    await db().delete(schema.messages);
+    seen.length = 0;
+    expect(await askForNotifications(KEY)).toBe("skipped_window");
+    expect(sends()).toHaveLength(0);
+  });
+  it("does not ask before onboarding is done, or when disabled", async () => {
+    const { askForNotifications } = await import("@/lib/conversation/notify");
+    await makeUser(KEY, "male", {}, { contactPhone: "+8801712345678", contactHasWhatsapp: null });
+    expect(await askForNotifications(KEY)).toBe("none");
+    await db().update(schema.users).set({ contactHasWhatsapp: true });
+    const { DEFAULT_SETTINGS } = await import("@/lib/settings-defaults");
+    const topics = DEFAULT_SETTINGS.notification_topics as Record<string, { enabled: boolean }>;
+    await setSetting("notification_topics", Object.fromEntries(Object.entries(topics).map(([k, t]) => [k, { ...t, enabled: false }])));
+    expect(await askForNotifications(KEY)).toBe("none");
+    expect(sends()).toHaveLength(0);
+  });
+  it("the agent knows an alert is not the message itself", async () => {
+    const { historyText } = await import("@/lib/conversation/context");
+    expect(historyText({ rawText: "card text", transcript: null, dedupeKey: "card-1", direction: "outbound", type: "notification" })).toContain("NOT yet shown");
+    expect(historyText({ rawText: "card text", transcript: null, dedupeKey: "card-1", direction: "outbound", type: "text" })).toBe("card text");
+  });
+  it("STOP erases the person's tokens", async () => {
+    await makeUser(KEY, "male");
+    await giveToken();
+    await (await import("@/lib/safety")).eraseUser(KEY, "test");
+    expect(await tokens()).toHaveLength(0);
   });
 });

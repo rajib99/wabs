@@ -5,7 +5,8 @@ import { logger } from "@/lib/logger";
 import { getSetting } from "@/lib/settings";
 import { normalizeDigits } from "@/lib/text";
 import {
-  type ChannelAdapter, type InboundMessage, type MediaFile, MediaTooLargeError, PermanentSendError, type ReceivedPayload, type SendResult, type StatusUpdate,
+  type ChannelAdapter, type InboundMessage, type MediaFile, MediaTooLargeError, type NotificationOptin, PermanentSendError, type ReceivedPayload,
+  type SendResult, type StatusUpdate,
 } from "./types";
 
 export { verifyWhatsAppSignature as verifyMessengerSignature } from "./whatsapp"; // same X-Hub-Signature-256 scheme
@@ -48,11 +49,16 @@ type MessagingEvent = {
   postback?: { title?: string; payload?: string; mid?: string };
   delivery?: { mids?: string[]; watermark: number };
   read?: { watermark: number };
+  optin?: { type?: string; payload?: string; one_time_notif_token?: string; token_expiry_timestamp?: number };
 };
 type Webhook = { object?: string; entry?: { id: string; messaging?: MessagingEvent[] }[] };
 
 export type PageEcho = { userKey: string; mid: string; text: string | null; byHuman: boolean; timestamp: Date };
-export type ParsedMessenger = ReceivedPayload & { reads: { userKey: string; watermark: Date }[]; echoes: PageEcho[] };
+export type ParsedMessenger = ReceivedPayload & { reads: { userKey: string; watermark: Date }[]; echoes: PageEcho[]; optins: NotificationOptin[] };
+
+/** The payload we attach to a one-time-notification request, and read back from the person's opt-in. */
+const OTN_PREFIX = "OTN:";
+export const otnPayload = (topic: string) => `${OTN_PREFIX}${topic}`;
 
 /** Strictly a number from the phone-sharing quick reply, never typed text. */
 function sharedPhoneFrom(payload: string | undefined): string | undefined {
@@ -65,7 +71,7 @@ function sharedPhoneFrom(payload: string | undefined): string | undefined {
 
 /** Normalizes one Messenger webhook delivery. Does no I/O. */
 export function parseMessengerEvent(payload: unknown, appId?: string): ParsedMessenger {
-  const out: ParsedMessenger = { messages: [], statuses: [], reads: [], echoes: [] };
+  const out: ParsedMessenger = { messages: [], statuses: [], reads: [], echoes: [], optins: [] };
   const body = payload as Webhook;
   if (body.object !== "page") return out;
   for (const entry of body.entry ?? []) {
@@ -106,6 +112,12 @@ export function parseMessengerEvent(payload: unknown, appId?: string): ParsedMes
         }
       } else if (e.read) {
         out.reads.push({ userKey, watermark: new Date(e.read.watermark) });
+      } else if (e.optin) {
+        // messaging_optins: the person pressed "Notify me" on a one-time-notification request we sent.
+        const { type, payload: p, one_time_notif_token: token, token_expiry_timestamp: exp } = e.optin;
+        if (type === "one_time_notif_req" && token && p?.startsWith(OTN_PREFIX)) {
+          out.optins.push({ phone: userKey, topic: p.slice(OTN_PREFIX.length), token, timestamp: when, ...(exp ? { expiresAt: new Date(exp) } : {}) });
+        }
       }
     }
   }
@@ -146,8 +158,8 @@ export class MessengerAdapter implements ChannelAdapter {
   readonly templateSettingKey = "messenger_templates";
 
   receiveMessage(payload: unknown): ReceivedPayload {
-    const { messages, statuses } = parseMessengerEvent(payload, env.messenger().MESSENGER_APP_ID);
-    return { messages, statuses };
+    const { messages, statuses, optins } = parseMessengerEvent(payload, env.messenger().MESSENGER_APP_ID);
+    return { messages, statuses, optins };
   }
 
   private auth() {
@@ -237,6 +249,20 @@ export class MessengerAdapter implements ChannelAdapter {
     });
   }
 
+  /** One-Time Notification request: Meta shows the title with a "Notify me" button. */
+  requestNotification(to: string, topic: string, title: string): Promise<SendResult> {
+    return this.sendMessage({
+      recipient: { id: psidOf(to) }, messaging_type: "RESPONSE",
+      message: { attachment: { type: "template", payload: { template_type: "one_time_notif_req", title, payload: otnPayload(topic) } } },
+    });
+  }
+
+  /** Spends a one-time-notification token: one message, allowed outside the window. */
+  async sendNotification(to: string, token: string, text: string): Promise<SendResult> {
+    psidOf(to); // a token belongs to one Messenger user; refuse anything else
+    return this.sendMessage({ recipient: { one_time_notif_token: token }, message: { text: splitForMessenger(text)[0] ?? "" } });
+  }
+
   async downloadMedia(url: string, maxBytes: number): Promise<MediaFile> {
     if (!isMessengerMediaUrl(url)) throw new PermanentSendError("media URL is not on Meta's CDN");
     const res = await fetch(url, { redirect: "error" });
@@ -267,7 +293,7 @@ export async function applyMessengerProfile(publicUrl: string) {
   });
   if (!profile.ok) throw new Error(`Messenger profile update failed: ${profile.status} ${(await profile.text()).slice(0, 300)}`);
   const pageId = env.messenger().MESSENGER_PAGE_ID;
-  const fields = "messages,messaging_postbacks,message_deliveries,message_reads,message_echoes";
+  const fields = "messages,messaging_postbacks,messaging_optins,message_deliveries,message_reads,message_echoes";
   const sub = await adapter.graph("POST", `/${encodeURIComponent(pageId)}/subscribed_apps?subscribed_fields=${fields}`);
   if (!sub.ok) throw new Error(`Page subscription failed: ${sub.status} ${(await sub.text()).slice(0, 300)}`);
 }
