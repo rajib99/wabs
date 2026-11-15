@@ -127,8 +127,10 @@ function finalReply(results: { name: string; result: Record<string, unknown> }[]
 }
 
 export class MockLLMProvider implements LLMProvider {
-  async chat({ messages }: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<LLMResult> {
+  async chat({ messages, tools }: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<LLMResult> {
     const usage = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 };
+    // A tool-less call is the gate interpreter: the mock cannot read free text, so it never guesses.
+    if (!tools.length) return { content: "unclear", toolCalls: [], usage };
     const ctx = JSON.parse((messages[1] as { content: string }).content) as AgentContext;
     let lastUser = messages.length - 1;
     while (lastUser >= 0 && messages[lastUser]!.role !== "user") lastUser--;

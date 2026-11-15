@@ -52,11 +52,19 @@ describe("findMatches", () => {
   });
 
   it("threshold binds: exactly at threshold passes, just above threshold fails", async () => {
-    await makeUser(M, "male"); await makeUser(F, "female", { religion: "hindu" }); // loses religion weight 20 → 80
-    await setSetting("match_threshold", 80.1);
+    await makeUser(M, "male"); await makeUser(F, "female", { marital_status: "divorced" }); // loses marital weight 5 → 95
+    await setSetting("match_threshold", 95.1);
     expect(await findMatches(M)).toHaveLength(0);
-    await setSetting("match_threshold", 80);
+    await setSetting("match_threshold", 95);
     expect(await findMatches(M)).toHaveLength(1);
+  });
+
+  it("never matches across religions, and a missing religion never passes", async () => {
+    await makeUser(M, "male"); await makeUser(F, "female", { religion: "hindu" });
+    expect(await hardFilteredCandidates(M, "male")).toHaveLength(0);
+    expect(await findMatches(F)).toHaveLength(0);
+    await db().delete(schema.profileAnswers).where(and(eq(schema.profileAnswers.phone, F), eq(schema.profileAnswers.questionKey, "religion")));
+    expect(await hardFilteredCandidates(M, "male")).toHaveLength(0);
   });
 
   it("excludes blocked, inactive and incomplete candidates and existing pairs", async () => {

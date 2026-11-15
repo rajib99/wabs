@@ -13,6 +13,8 @@ import { confirmProfilePhoto } from "@/lib/photos";
 import { eraseUser, guardReply, isStopCommand, parseAgeGate, parseYesNo } from "@/lib/safety";
 import { setSetting } from "@/lib/settings";
 import { getStorage } from "@/lib/storage";
+import { setAiForTests } from "@/lib/ai";
+import { MockLLMProvider } from "@/lib/ai/mock-llm";
 import { inbound, makeMatch, makeUser, outbound, sentEvents } from "./helpers";
 
 const P = "+8801711000501";
@@ -88,6 +90,35 @@ describe("age gate and consent", () => {
     expect(isStopCommand("office bondho thakle kotha hobe")).toBe(false);
   });
   const step = async (text: string) => { const m = await inbound(P, text); return { action: await preflight(m.id), id: m.id }; };
+
+  it("a number with a comparison is not a stated age", () => {
+    for (const t of ["18 er beshi", "under 18", "18+", "boyos 18 er kom"]) expect(parseAgeGate(t, 18), t).toBe("unclear");
+    expect(parseAgeGate("amar boyos 25", 18)).toBe("adult");
+  });
+
+  it("loose answers to the age and consent questions go to the interpreter instead of being re-asked", async () => {
+    const seen: string[] = [];
+    setAiForTests({ llm: { chat: async ({ messages }) => {
+      seen.push(String(messages[1]!.content));
+      return { content: "yes", toolCalls: [], usage: { promptTokens: 0, completionTokens: 0, cachedTokens: 0 } };
+    } } });
+    try {
+      await step("hello");
+      await step("amar cheler boyos 18 er beshi");
+      expect((await user())!.status).toBe("awaiting_consent");
+      await step("I agree, go ahead");
+      expect((await user())!.status).toBe("active");
+      expect(seen.map((c) => JSON.parse(c).kind)).toEqual(["age", "consent"]);
+    } finally {
+      setAiForTests({ llm: new MockLLMProvider() });
+    }
+  });
+
+  it("an interpreter that cannot tell (or fails) re-asks rather than guessing", async () => {
+    await step("hello");
+    await step("18 er beshi"); // the mock LLM answers "unclear"
+    expect((await user())!.status).toBe("awaiting_age");
+  });
 
   it("walks new → age → consent → active, keeping no pre-consent text", async () => {
     expect((await step("আসসালামু আলাইকুম আমি করিম, ফোন ০১৭১১")).action).toBe("done");

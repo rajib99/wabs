@@ -350,6 +350,7 @@ export async function saveMessagesAction(form: FormData): Promise<ActionResult> 
     const messages = Object.fromEntries(Object.keys(DEFAULT_MESSAGES).map((k) => [k, String(form.get(`msg_${k}`) ?? "").trim() || DEFAULT_MESSAGES[k as keyof typeof DEFAULT_MESSAGES]]));
     await setSetting("messages", messages);
     await setSetting("system_prompt", str(form, "system_prompt"));
+    await setSetting("gate_interpret_prompt", str(form, "gate_interpret_prompt"));
     await audit(email, "settings.messages_updated", "settings", "messages");
     revalidatePath("/admin/templates");
   });

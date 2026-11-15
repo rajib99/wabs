@@ -69,10 +69,11 @@ describe("question engine", () => {
     const required = questions.filter((q) => q.required);
     const values: Record<string, unknown> = {
       name: "ক", age: 25, gender: "male", created_by_relation: "self", religion: "muslim", marital_status: "never_married", district: "ঢাকা", current_location: "ঢাকা",
-      education: "bachelor", profession: "শিক্ষক", job_type: "govt", family_details: "ভালো", preferred_age_range: [20, 25], preferred_education: ["any"], preferred_job_type: ["any"], preferred_location: ["any"],
+      education: "bachelor", profession: "শিক্ষক", job_type: "govt", job_details: "Assistant officer at the district office", family_details: "ভালো", preferred_age_range: [20, 25], preferred_education: ["any"], preferred_job_type: ["any"], preferred_location: ["any"],
     };
     const completions = [];
-    for (const q of required) completions.push(await save(q.key, values[q.key]));
+    // business_details is asked only of men in business; this one has a government job.
+    for (const q of required) if (q.key !== "business_details") completions.push(await save(q.key, values[q.key]));
     expect(completions.filter((c) => c.ok && c.profileCompleted)).toHaveLength(1);
     expect(completions.at(-1)).toMatchObject({ profileCompleted: true });
     expect(isProfileComplete(questions, await loadAnswers(P))).toBe(true);

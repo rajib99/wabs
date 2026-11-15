@@ -11,11 +11,11 @@ export const dynamic = "force-dynamic";
 
 export default async function TemplatesPage() {
   await requireRole("owner");
-  const [price, bkash, trx, perMin, perDay, lang, templates, messages, prompt, mtemplates] = await Promise.all([
+  const [price, bkash, trx, perMin, perDay, lang, templates, messages, prompt, mtemplates, gatePrompt] = await Promise.all([
     getSetting<number>("price_bdt"), getSetting<string>("bkash_number"), getSetting<string>("trx_id_pattern"),
     getSetting<number>("rate_limit_per_minute"), getSetting<number>("rate_limit_per_day"), getSetting<string>("template_language"),
     getSetting<Record<string, string>>("templates"), getSetting<Record<string, string>>("messages"), getSetting<string>("system_prompt"),
-    getSetting<Record<string, string>>("messenger_templates"),
+    getSetting<Record<string, string>>("messenger_templates"), getSetting<string>("gate_interpret_prompt"),
   ]);
   const merged = { ...DEFAULT_MESSAGES, ...messages };
   return (
@@ -53,6 +53,9 @@ export default async function TemplatesPage() {
         <Card className="flex flex-col gap-3">
           <h2 className="font-medium">BS-এর নির্দেশনা</h2>
           <Textarea name="system_prompt" defaultValue={prompt} rows={14} aria-label="সিস্টেম প্রম্পট" required />
+          <h2 className="mt-2 font-medium">Gate answer interpreter (age, consent, WhatsApp)</h2>
+          <p className="text-sm text-muted-foreground">Used only when a reply to these yes/no questions is not a plain yes or no. Must make the model answer one word: yes, no or unclear. {"{min_age}"} is replaced with the minimum age.</p>
+          <Textarea name="gate_interpret_prompt" defaultValue={gatePrompt} rows={8} dir="ltr" aria-label="gate_interpret_prompt" required />
           <h2 className="mt-2 font-medium">স্বয়ংক্রিয় বার্তা</h2>
           <p className="text-sm text-muted-foreground">{"{amount}"} ধরনের অংশ সিস্টেম পূরণ করে; এগুলো রাখুন।</p>
           {Object.entries(merged).map(([k, v]) => (

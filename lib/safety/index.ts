@@ -80,10 +80,17 @@ export function parseYesNo(text: string): YesNo {
   return "unclear";
 }
 
-/** Understands "হ্যাঁ", "না", or a stated age such as "২৫" or "আমার বয়স ১৬". */
+/** "18 er beshi", "under 18", "18+": a number with a comparison is not a stated age, so it is left to the interpreter. */
+const AGE_COMPARISON_RE = /\u0995\u09ae|\u09ac\u09c7\u09b6\u09bf|\u09a8\u09bf\u099a\u09c7|\u0989\u09aa\u09b0\u09c7|\u09b9\u09af\u09bc\u09a8\u09bf|\u09aa\u09c2\u09b0\u09cd\u09a3|\b(?:kom|kam|beshi|besi|under|over|below|above|less|more|niche|nice|upore|hoyni|hoy\s*ni|purno|puron|plus)\b|[+<>]/i;
+
+/**
+ * Understands a plain yes / no, or a stated age such as "25" or "my age is 16" (Bengali digits too).
+ * Anything looser returns "unclear" and the pipeline asks the LLM interpreter before asking again.
+ */
 export function parseAgeGate(text: string, minAge: number): "adult" | "minor" | "unclear" {
   const nums = (toAsciiDigits(text).match(/\d{1,3}/g) ?? []).map(Number).filter((n) => n > 0 && n < 120);
-  if (nums.length === 1) return nums[0]! >= minAge ? "adult" : "minor";
+  if (nums.length === 1 && !AGE_COMPARISON_RE.test(text)) return nums[0]! >= minAge ? "adult" : "minor";
+  if (nums.length) return "unclear";
   const yn = parseYesNo(text);
   return yn === "yes" ? "adult" : yn === "no" ? "minor" : "unclear";
 }

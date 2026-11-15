@@ -16,7 +16,7 @@ export function meetsMinimumAge(gender: string | null, answers: Answers, min: Mi
   return Number.isFinite(age) && age >= required;
 }
 
-/** Step 1: every hard filter, evaluated in SQL. Dealbreakers of BOTH users must hold. */
+/** Step 1: every hard filter, evaluated in SQL: opposite gender, same religion, and dealbreakers of BOTH users. */
 export async function hardFilteredCandidates(phone: string, gender: string, limit = 500): Promise<{ phone: string; gender: string }[]> {
   const opposite = gender === "male" ? "female" : "male";
   const res = await db().execute(sql`
@@ -25,6 +25,12 @@ export async function hardFilteredCandidates(phone: string, gender: string, limi
       AND c.gender = ${opposite}
       AND c.status = 'active' AND c.profile_complete AND NOT c.blocked
       AND c.contact_phone IS NOT NULL AND c.contact_phone_verified
+      -- Same religion only, always: nobody is asked for a religion preference. A missing religion never passes.
+      AND EXISTS (
+        SELECT 1 FROM profile_answers mine
+        JOIN profile_answers theirs ON theirs.phone = c.phone AND theirs.question_key = 'religion'
+        WHERE mine.phone = ${phone} AND mine.question_key = 'religion' AND mine.value = theirs.value
+      )
       AND NOT EXISTS (
         SELECT 1 FROM matches m
         WHERE (m.user_a = ${phone} AND m.user_b = c.phone) OR (m.user_a = c.phone AND m.user_b = ${phone})

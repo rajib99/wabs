@@ -9,6 +9,7 @@ import { getSetting, msg } from "@/lib/settings";
 import { getStorage } from "@/lib/storage";
 import { normalizeWalletNumber, toAsciiDigits } from "@/lib/text";
 import { completionNotes, contactQuestion, pendingContactStep } from "./contact";
+import { interpretGateReply } from "./interpret";
 import { sendToUser } from "./outbound";
 
 const { users, messages } = schema;
@@ -77,7 +78,11 @@ export async function preflight(messageId: string): Promise<NextAction> {
       return done();
     }
     if (user.status === "awaiting_age") {
-      const verdict = parseAgeGate(text, await getSetting<number>("min_age_gate"));
+      let verdict = parseAgeGate(text, await getSetting<number>("min_age_gate"));
+      if (verdict === "unclear") {
+        const read = await interpretGateReply("age", await msg("welcome_age_gate"), text);
+        verdict = read === "yes" ? "adult" : read === "no" ? "minor" : "unclear";
+      }
       if (verdict === "minor") {
         const goodbye = await msg("underage_end");
         await endUnderage(phone);
@@ -93,7 +98,8 @@ export async function preflight(messageId: string): Promise<NextAction> {
       return done();
     }
     if (user.status === "awaiting_consent") {
-      const answer = parseYesNo(text);
+      let answer = parseYesNo(text);
+      if (answer === "unclear") answer = await interpretGateReply("consent", await msg("consent_request"), text);
       if (answer === "unclear") {
         await sendToUser(phone, await msg("consent_retry"), { dedupeKey: gateKey, deferOnFailure: true });
         return done();
@@ -267,7 +273,10 @@ async function contactStepReply(
     return true;
   }
 
-  const answer = parseYesNo(text);
+  let answer = parseYesNo(text);
+  if (answer === "unclear" && !text.includes("?")) {
+    answer = await interpretGateReply("whatsapp", await contactQuestion("whatsapp", user.contactPhone), text);
+  }
   if (answer === "unclear") {
     if (text.trim().split(/\s+/).length > 3) return false; // a sentence: let the agent answer and ask again
     await sendToUser(phone, await msg("whatsapp_retry"), { dedupeKey: gateKey, deferOnFailure: true });
