@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { reviewPhotoAction } from "@/app/admin/actions";
 
@@ -5,14 +6,14 @@ import { reviewPhotoAction } from "@/app/admin/actions";
 export function PhotoReview({ id }: { id: string }) {
   return (
     <div className="flex gap-2">
-      <form action={reviewPhotoAction} className="flex-1">
+      <ActionForm action={reviewPhotoAction} className="flex-1">
         <input type="hidden" name="id" value={id} /><input type="hidden" name="decision" value="approve" />
         <Button className="w-full">অনুমোদন</Button>
-      </form>
-      <form action={reviewPhotoAction} className="flex-1">
+      </ActionForm>
+      <ActionForm action={reviewPhotoAction} className="flex-1">
         <input type="hidden" name="id" value={id} /><input type="hidden" name="decision" value="reject" />
         <Button variant="destructive" className="w-full">বাতিল</Button>
-      </form>
+      </ActionForm>
     </div>
   );
 }

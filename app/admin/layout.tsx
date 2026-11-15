@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { Toaster } from "@/components/ui/toaster";
 import { logoutAction } from "./actions";
 
 const OWNER_NAV: [string, string][] = [
@@ -22,10 +23,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <Link key={href} href={href} className="whitespace-nowrap rounded-md px-2 py-2 hover:bg-muted">{label}</Link>
             ))}
           </nav>
-          <form action={logoutAction}><button className="whitespace-nowrap text-sm text-muted-foreground underline">বের হোন</button></form>
+          <form action={logoutAction}><button className="cursor-pointer whitespace-nowrap text-sm text-muted-foreground underline">বের হোন</button></form>
         </div>
       </header>
       <main className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6">{children}</main>
+      <Toaster />
     </div>
   );
 }

@@ -23,3 +23,11 @@ body {
 }
 * { border-color: var(--border); }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* Tailwind v4 resets buttons to the default cursor; anything clickable should show the hand. */
+@layer base {
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]), summary, select:not(:disabled),
+  input:is([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="submit"]):not(:disabled),
+  label:has(> input:is([type="checkbox"], [type="radio"])) { cursor: pointer; }
+  button:disabled, [aria-busy="true"] { cursor: progress; }
+}

@@ -4,15 +4,18 @@ import { sendToUser } from "@/lib/conversation/outbound";
 import { db, schema } from "@/lib/db";
 import { cardFields, getMatch, isClosed, isVisibleTo, otherParty } from "@/lib/matches";
 import { msg } from "@/lib/settings";
+import { BANGLISH_YES, squeezeLatin } from "@/lib/safety";
 import { getStorage } from "@/lib/storage";
 
 const { photos, photoRequests } = schema;
 
 /** Deterministic check: the LLM alone cannot release a photo, the user must have said yes in this message. */
 export function isExplicitYes(text: string): boolean {
-  const t = text.trim().toLowerCase();
-  if (/(^|[\s,।])(না|নাহ|নয়|no|don'?t)([\s,।.!]|$)/.test(t)) return false;
-  return /(হ্যাঁ|হ্যা|জি|জ্বি|অনুমতি দিলাম|পাঠান|পাঠিয়ে দিন|রাজি|ঠিক আছে|\byes\b|\bok\b|\bokay\b)/.test(t);
+  const t = squeezeLatin(text);
+  if (/(^|[\s,।])(না|নাহ|নয়|no|don'?t|na|nah|noi|nai|dibo na|debo na)([\s,।.!]|$)/.test(t)) return false;
+  if (/(হ্যাঁ|হ্যা|জি|জ্বি|অনুমতি দিলাম|পাঠান|পাঠিয়ে দিন|রাজি|ঠিক আছে)/.test(t)) return true;
+  // Banglish, as whole words so "ha" inside another word does not count.
+  return new RegExp(String.raw`(^|[\s,।])(${BANGLISH_YES}|pathan|pathiye\s*din|pathao|onumoti\s*dilam|dilam)([\s,।.!]|$)`).test(t);
 }
 
 export const approvedPhoto = async (phone: string) => {

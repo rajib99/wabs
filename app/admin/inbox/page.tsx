@@ -1,5 +1,6 @@
 import { desc, sql } from "drizzle-orm";
 import Link from "next/link";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, PageTitle } from "@/components/ui/card";
 import { requireRole } from "@/lib/admin-auth";
@@ -30,10 +31,10 @@ export default async function InboxPage() {
             </div>
             <p className="whitespace-pre-wrap break-words">{e.reason}</p>
             {e.status === "open" && e.kind === "verify_phone" && (
-              <form action={verifyContactPhoneAction}><input type="hidden" name="id" value={e.id} /><Button>ফোন করে যাচাই করেছি</Button></form>
+              <ActionForm action={verifyContactPhoneAction}><input type="hidden" name="id" value={e.id} /><Button>ফোন করে যাচাই করেছি</Button></ActionForm>
             )}
             {e.status === "open" && (
-              <form action={resolveEscalationAction}><input type="hidden" name="id" value={e.id} /><Button variant="outline">সমাধান হয়েছে</Button></form>
+              <ActionForm action={resolveEscalationAction}><input type="hidden" name="id" value={e.id} /><Button variant="outline">সমাধান হয়েছে</Button></ActionForm>
             )}
           </Card>
         ))}

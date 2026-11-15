@@ -2,6 +2,7 @@ import { asc, desc, eq, or } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PhotoReview } from "@/components/photo-review";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, PageTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,25 +40,25 @@ export default async function UserPage({ params }: { params: Promise<{ phone: st
           {user.contactPhone && <Badge>{user.contactPhoneVerified ? "যাচাইকৃত" : "যাচাই হয়নি"}</Badge>}
           {user.contactPhoneSource && <Badge>{user.contactPhoneSource}</Badge>}
           {user.contactPhone && (
-            <form action={setContactVerifiedAction} className="ml-auto">
+            <ActionForm action={setContactVerifiedAction} className="ml-auto">
               <input type="hidden" name="phone" value={phone} /><input type="hidden" name="verified" value={String(!user.contactPhoneVerified)} />
               <Button variant="outline">{user.contactPhoneVerified ? "যাচাই বাতিল" : "ফোন করে যাচাই করেছি"}</Button>
-            </form>
+            </ActionForm>
           )}
         </div>
         {user.humanUntil && user.humanUntil.getTime() > Date.now() && (
           <div className="flex flex-wrap items-center gap-2">
             <span>Page inbox থেকে একজন কথা বলছেন; BS চুপ থাকবে {user.humanUntil.toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })} পর্যন্ত।</span>
-            <form action={endTakeoverAction} className="ml-auto"><input type="hidden" name="phone" value={phone} /><Button variant="outline">BS-কে ফিরিয়ে দিন</Button></form>
+            <ActionForm action={endTakeoverAction} className="ml-auto"><input type="hidden" name="phone" value={phone} /><Button variant="outline">BS-কে ফিরিয়ে দিন</Button></ActionForm>
           </div>
         )}
       </Card>
       <Card className="flex flex-wrap items-center gap-2">
         <span className="break-all">{phone}</span><Badge>{user.status}</Badge>{user.blocked && <Badge>blocked</Badge>}
-        <form action={setBlockedAction} className="ml-auto">
+        <ActionForm action={setBlockedAction} className="ml-auto">
           <input type="hidden" name="phone" value={phone} /><input type="hidden" name="blocked" value={String(!user.blocked)} />
           <Button variant="outline">{user.blocked ? "আনব্লক" : "ব্লক"}</Button>
-        </form>
+        </ActionForm>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -115,11 +116,11 @@ export default async function UserPage({ params }: { params: Promise<{ phone: st
       <Card className="flex flex-col gap-2 border-destructive">
         <h2 className="font-medium">সব তথ্য মুছে ফেলুন</h2>
         <p className="text-sm text-muted-foreground">প্রোফাইল, ছবি, কথোপকথন স্থায়ীভাবে মুছে যাবে। নিশ্চিত করতে ERASE লিখুন।</p>
-        <form action={eraseUserAction} className="flex gap-2">
+        <ActionForm action={eraseUserAction} redirectTo="/admin/users" className="flex gap-2">
           <input type="hidden" name="phone" value={phone} />
           <Input name="confirm" placeholder="ERASE" aria-label="নিশ্চিত করুন" autoComplete="off" />
           <Button variant="destructive">মুছুন</Button>
-        </form>
+        </ActionForm>
       </Card>
     </>
   );

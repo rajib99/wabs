@@ -1,4 +1,5 @@
 import { desc, like, or } from "drizzle-orm";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, PageTitle } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
@@ -42,13 +43,13 @@ export default async function ChannelPage() {
             : <p role="alert" className="text-destructive">Page token কাজ করছে না: {messenger?.error}</p>}
           <p className="text-sm text-muted-foreground">Meta app-এর Webhooks-এ এই URL দিন: <code className="break-all">{env.publicUrl()}/api/messenger/webhook</code></p>
           <p className="text-sm text-muted-foreground">নিচের বোতাম Get Started, স্বাগত বার্তা ও মেনু (মানুষের সাহায্য, তথ্য মুছুন, গোপনীয়তা নীতি) সেট করে এবং Page-এর ইভেন্টে app যুক্ত করে।</p>
-          <form action={applyMessengerSetupAction}><Button>Messenger সেটআপ প্রয়োগ করুন</Button></form>
-          <form action={saveTakeoverHoursAction} className="flex flex-wrap items-end gap-2">
+          <ActionForm action={applyMessengerSetupAction}><Button>Messenger সেটআপ প্রয়োগ করুন</Button></ActionForm>
+          <ActionForm action={saveTakeoverHoursAction} className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-sm">Page inbox থেকে কেউ উত্তর দিলে BS কত ঘণ্টা চুপ থাকবে
               <Input type="number" name="human_takeover_hours" min="1" max="168" defaultValue={takeoverHours} className="w-32" />
             </label>
             <Button variant="outline">সংরক্ষণ</Button>
-          </form>
+          </ActionForm>
         </Card>
       )}
 
@@ -56,23 +57,23 @@ export default async function ChannelPage() {
         <Card className="flex flex-col gap-3">
           {openwa?.restriction && <p role="alert" className="font-medium text-destructive">WhatsApp এই নম্বরে সীমাবদ্ধতা দিয়েছে ({openwa.restriction.kind ?? "অজানা"})।</p>}
           <LiveStatus />
-          <form action={connectWhatsAppAction}><Button>{openwa?.exists ? "আবার সংযোগ করুন" : "সংযোগ শুরু করুন"}</Button></form>
+          <ActionForm action={connectWhatsAppAction}><Button>{openwa?.exists ? "আবার সংযোগ করুন" : "সংযোগ শুরু করুন"}</Button></ActionForm>
         </Card>
       )}
 
       <Card className="flex flex-col gap-3">
         <h2 className="font-medium">BS চালু/বিরতি</h2>
         <p className="text-sm text-muted-foreground">বিরতিতে মেসেজ জমা থাকে, চালু করলে উত্তর যায় (২৪ ঘণ্টার মধ্যের মেসেজ)। STOP সবসময় কাজ করে।</p>
-        <form action={setBotPausedAction}>
+        <ActionForm action={setBotPausedAction}>
           <input type="hidden" name="paused" value={String(!paused)} />
           <Button variant={paused ? "default" : "outline"}>{paused ? "BS চালু করুন" : "BS বিরতি দিন"}</Button>
-        </form>
+        </ActionForm>
         {paused && <p role="status" className="font-medium">BS এখন বিরতিতে আছে।</p>}
       </Card>
 
       {(channel === "openwa" || channel === "whatsapp") && (
         <Card>
-          <form action={saveAllowlistAction} className="flex flex-col gap-3">
+          <ActionForm action={saveAllowlistAction} className="flex flex-col gap-3">
             <h2 className="font-medium">পরীক্ষকের তালিকা</h2>
             <p className="text-sm text-muted-foreground">চালু থাকলে BS শুধু এই নম্বরগুলোর উত্তর দেয়; অন্যদের মেসেজ সংরক্ষণও হয় না।</p>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="enabled" defaultChecked={enabled} />শুধু তালিকার নম্বরকে উত্তর দিন</label>
@@ -80,7 +81,7 @@ export default async function ChannelPage() {
               <Textarea name="allowlist" rows={4} defaultValue={allowlist.join("\n")} dir="ltr" className="font-mono" />
             </label>
             <Button className="self-start">সংরক্ষণ</Button>
-          </form>
+          </ActionForm>
         </Card>
       )}
       {channel === "messenger" && (
@@ -101,10 +102,10 @@ export default async function ChannelPage() {
       {channel === "openwa" && openwa?.exists && (
         <Card className="flex flex-col gap-2 border-destructive">
           <h2 className="font-medium">নম্বর আনলিংক করুন</h2>
-          <form action={disconnectWhatsAppAction} className="flex gap-2">
+          <ActionForm action={disconnectWhatsAppAction} className="flex gap-2">
             <Input name="confirm" placeholder="UNLINK" aria-label="নিশ্চিত করুন" autoComplete="off" />
             <Button variant="destructive">আনলিংক</Button>
-          </form>
+          </ActionForm>
         </Card>
       )}
     </>

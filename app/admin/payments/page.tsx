@@ -1,4 +1,5 @@
 import { desc, sql } from "drizzle-orm";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, PageTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,12 +31,12 @@ export default async function PaymentsPage() {
             </div>
             {p.status === "pending" && (
               <div className="flex flex-col gap-2 sm:flex-row">
-                <form action={verifyPaymentAction}><input type="hidden" name="id" value={p.id} /><Button className="w-full sm:w-auto">যাচাই হয়েছে</Button></form>
-                <form action={rejectPaymentAction} className="flex flex-1 gap-2">
+                <ActionForm action={verifyPaymentAction}><input type="hidden" name="id" value={p.id} /><Button className="w-full sm:w-auto">যাচাই হয়েছে</Button></ActionForm>
+                <ActionForm action={rejectPaymentAction} className="flex flex-1 gap-2">
                   <input type="hidden" name="id" value={p.id} />
                   <Input name="note" placeholder="বাতিলের কারণ (ব্যবহারকারীকে পাঠানো হবে)" aria-label="বাতিলের কারণ" />
                   <Button variant="destructive">বাতিল</Button>
-                </form>
+                </ActionForm>
               </div>
             )}
           </Card>

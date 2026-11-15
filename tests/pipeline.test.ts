@@ -79,6 +79,14 @@ describe("age gate and consent", () => {
     expect(parseYesNo("রাজি")).toBe("yes");
     expect(parseYesNo("পরে দেখি")).toBe("unclear");
   });
+  it("understands Banglish", () => {
+    for (const y of ["Thik ase", "thik ache", "thikache", "Haaa", "hya", "ji", "Razi", "accha", "OK!"]) expect(parseYesNo(y), y).toBe("yes");
+    for (const n of ["na", "Naaa", "ji na", "raji na", "razi noi", "lagbe na"]) expect(parseYesNo(n), n).toBe("no");
+    for (const u of ["pore dekhi", "je kono somoy", "hello"]) expect(parseYesNo(u), u).toBe("unclear");
+    expect(parseAgeGate("ha", 18)).toBe("adult");
+    expect(isStopCommand("Bondho korun")).toBe(true);
+    expect(isStopCommand("office bondho thakle kotha hobe")).toBe(false);
+  });
   const step = async (text: string) => { const m = await inbound(P, text); return { action: await preflight(m.id), id: m.id }; };
 
   it("walks new → age → consent → active, keeping no pre-consent text", async () => {

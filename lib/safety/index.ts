@@ -49,16 +49,34 @@ export async function drainGatewayEraseQueue() {
 
 /** The whole message must be the command, so a sentence that merely contains "বন্ধ" cannot erase a profile. */
 export function isStopCommand(text: string): boolean {
-  const t = text.trim().toLowerCase().replace(/[।.!\s]+$/, "");
-  return ["stop", "delete", "unsubscribe", "বন্ধ", "বন্ধ করুন", "স্টপ", "ডিলিট", "ডিলিট করুন", "মুছে ফেলুন", "আমার তথ্য মুছে ফেলুন", "আমার প্রোফাইল ডিলিট করুন"].includes(t);
+  const t = text.trim().toLowerCase().replace(/[।.!\s]+$/, "").replace(/\s+/g, " ");
+  return [
+    "stop", "delete", "unsubscribe", "বন্ধ", "বন্ধ করুন", "স্টপ", "ডিলিট", "ডিলিট করুন", "মুছে ফেলুন", "আমার তথ্য মুছে ফেলুন", "আমার প্রোফাইল ডিলিট করুন",
+    // Banglish
+    "bondho", "bondho korun", "bondho koren", "bondo", "bondo korun", "delete korun", "delete koren", "delete koro", "muche felun", "muche din",
+    "amar tottho muche felun", "amar profile delete korun", "amar profile delete koren",
+  ].includes(t);
 }
 
 export type YesNo = "yes" | "no" | "unclear";
 
+/**
+ * Banglish: Bengali typed in Latin letters, spelled however the user likes ("thik ase", "thik ache", "haa", "razi na").
+ * Repeated letters are squeezed first, so "haaaa" and "naaa" read as "ha" and "na".
+ */
+export const BANGLISH_YES = String.raw`ha|ha?n|h[ey]a|hae|ji|jee|jhi|t?thik\s*a(?:s|ch|sh)h?e|thik\s*h?ai|thikache|thikase|ra[jz]i|ac?ch?ha|ok|okay|oke|yes|yeah|yup|sure`;
+export const BANGLISH_NO = String.raw`na|nah|no|nope|j[ie]e?\s*na|ra[jz]i\s*(?:na|n[oa]i)|dorkar\s*nai|lagbe\s*na`;
+
+/** Lowercases and squeezes runs of the same Latin letter: "Haaa!!" -> "ha!!". Bengali script is left alone. */
+export function squeezeLatin(text: string): string {
+  return text.trim().toLowerCase().replace(/([a-z])\1+/g, "$1");
+}
+
 export function parseYesNo(text: string): YesNo {
-  const t = text.trim().toLowerCase();
-  if (/^(না|নাহ|জি না|জ্বি না|no|nope|রাজি না|রাজি নই)([\s।.!]|$)/.test(t)) return "no";
-  if (/^(হ্যাঁ|হ্যা|হা|জি|জ্বি|yes|ok|okay|ঠিক আছে|রাজি|আছে)([\s।.!]|$)/.test(t)) return "yes";
+  const t = squeezeLatin(text);
+  const end = String.raw`([\s,।.!]|$)`;
+  if (new RegExp(`^(না|নাহ|জি না|জ্বি না|রাজি না|রাজি নই|${BANGLISH_NO})${end}`).test(t)) return "no";
+  if (new RegExp(`^(হ্যাঁ|হ্যা|হা|জি|জ্বি|ঠিক আছে|রাজি|আছে|${BANGLISH_YES})${end}`).test(t)) return "yes";
   return "unclear";
 }
 

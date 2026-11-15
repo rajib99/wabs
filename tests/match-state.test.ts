@@ -112,6 +112,8 @@ describe("photo consent", () => {
   it("recognises explicit yes only", () => {
     for (const y of ["হ্যাঁ", "জি পাঠান", "ঠিক আছে", "yes", "রাজি"]) expect(isExplicitYes(y)).toBe(true);
     for (const n of ["না", "ঠিক আছে না", "হ্যাঁ না মানে না", "পরে দেখি", "no"]) expect(isExplicitYes(n)).toBe(false);
+    for (const y of ["ha pathan", "thik ase", "ji pathiye din", "Haa"]) expect(isExplicitYes(y), y).toBe(true);
+    for (const n of ["na", "thik ase na", "dibo na", "hahaha", "pore dekhi"]) expect(isExplicitYes(n), n).toBe(false);
   });
   it("sends only after an explicit yes from the owner", async () => {
     await pair(); await withPhoto(B);

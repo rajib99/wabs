@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card, PageTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,7 @@ export default async function SettingsPage() {
   return (
     <>
       <PageTitle>ম্যাচিং সেটিংস</PageTitle>
-      <form action={saveMatchingSettingsAction} className="flex flex-col gap-4">
+      <ActionForm action={saveMatchingSettingsAction} className="flex flex-col gap-4">
         <Card className="flex flex-col gap-3">
           <ThresholdSlider initial={threshold} />
           {num("daily_intro_limit", "প্রতিদিন একজনের জন্য সর্বোচ্চ নতুন প্রস্তাব", limit)}
@@ -52,7 +53,7 @@ export default async function SettingsPage() {
           </div>
         </Card>
         <Button className="self-start">সংরক্ষণ</Button>
-      </form>
+      </ActionForm>
     </>
   );
 }

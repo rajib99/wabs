@@ -1,8 +1,11 @@
-import { cva, type VariantProps } from "class-variance-authority";
-import type { ButtonHTMLAttributes } from "react";
-import { cn } from "@/lib/utils";
+"use client";
 
-const button = cva("inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50", {
+import { cva, type VariantProps } from "class-variance-authority";
+import { useContext, type ButtonHTMLAttributes } from "react";
+import { cn } from "@/lib/utils";
+import { FormPending } from "./action-form";
+
+const button = cva("inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-opacity hover:opacity-90 active:opacity-75 disabled:cursor-progress disabled:opacity-50", {
   variants: {
     variant: {
       default: "bg-primary text-primary-foreground",
@@ -13,6 +16,7 @@ const button = cva("inline-flex min-h-10 items-center justify-center gap-2 round
   defaultVariants: { variant: "default" },
 });
 
-export function Button({ className, variant, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>) {
-  return <button className={cn(button({ variant }), className)} {...props} />;
+export function Button({ className, variant, disabled, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>) {
+  const pending = useContext(FormPending);
+  return <button className={cn(button({ variant }), className)} disabled={disabled || pending} aria-busy={pending || undefined} {...props} />;
 }

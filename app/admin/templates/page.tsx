@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card, PageTitle } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
@@ -20,7 +21,7 @@ export default async function TemplatesPage() {
   return (
     <>
       <PageTitle>বার্তা ও মূল্য</PageTitle>
-      <form action={savePricingAction}>
+      <ActionForm action={savePricingAction}>
         <Card className="flex flex-col gap-3">
           <h2 className="font-medium">মূল্য ও bKash</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -47,8 +48,8 @@ export default async function TemplatesPage() {
           </div>
           <Button className="self-start">সংরক্ষণ</Button>
         </Card>
-      </form>
-      <form action={saveMessagesAction}>
+      </ActionForm>
+      <ActionForm action={saveMessagesAction}>
         <Card className="flex flex-col gap-3">
           <h2 className="font-medium">BS-এর নির্দেশনা</h2>
           <Textarea name="system_prompt" defaultValue={prompt} rows={14} aria-label="সিস্টেম প্রম্পট" required />
@@ -59,7 +60,7 @@ export default async function TemplatesPage() {
           ))}
           <Button className="self-start">সংরক্ষণ</Button>
         </Card>
-      </form>
+      </ActionForm>
     </>
   );
 }
