@@ -16,11 +16,11 @@ export const DEFAULT_MESSAGES = {
   phone_retry: "দয়া করে একটি সঠিক মোবাইল নম্বর দিন (যেমন 01712345678), অথবা নিচের বাটনে চাপ দিন।",
   whatsapp_question: "ধন্যবাদ! এই নম্বরে ({phone}) কি WhatsApp চালু আছে? \"হ্যাঁ\" বা \"না\" লিখুন।",
   whatsapp_retry: "দয়া করে \"হ্যাঁ\" বা \"না\" লিখে জানান, নম্বরটিতে কি WhatsApp চালু আছে?",
-  contact_done: "ধন্যবাদ! আপনার প্রোফাইল সম্পূর্ণ হয়েছে। উপযুক্ত প্রস্তাব পেলে জানাব।",
-  contact_done_unverified: "ধন্যবাদ! আপনার প্রোফাইল সম্পূর্ণ হয়েছে। নম্বরটি আমাদের টিম যাচাই করবে, যাচাইয়ের পর প্রস্তাব পাঠানো শুরু হবে।",
+  contact_done: "ধন্যবাদ! আপনার প্রোফাইল সম্পূর্ণ হয়েছে। উপযুক্ত প্রস্তাব পেলে আমরা আবার মেসেজ দেব।",
+  contact_done_unverified: "ধন্যবাদ! আপনার প্রোফাইল সম্পূর্ণ হয়েছে। নম্বরটি আমাদের টিম যাচাই করবে, যাচাইয়ের পর প্রস্তাব পাঠানো শুরু হবে। উপযুক্ত প্রস্তাব পেলে আমরা আবার মেসেজ দেব।",
   stop_info: "আপনার প্রোফাইল, ছবি ও কথোপকথন মুছে ফেলতে শুধু STOP লিখে পাঠান।",
   bot_resumed: "এখন আবার BS (স্বয়ংক্রিয় AI সহকারী) আপনার সঙ্গে কথা বলছে।",
-  check_in_hint: "নিয়ম অনুযায়ী আপনার শেষ মেসেজের ২৪ ঘণ্টা পর আমরা নিজে থেকে মেসেজ দিতে পারি না। তাই নতুন প্রস্তাব এসেছে কিনা জানতে মাঝে মাঝে \"হাই\" লিখুন।",
+  check_in_hint: "মাঝে মাঝে \"হাই\" লিখে আমাদের মনে করিয়েও দিতে পারেন।",
   voice_before_consent: "শুরু করার আগের এই ধাপে দয়া করে লিখে উত্তর দিন।",
   voice_unclear: "দুঃখিত, ভয়েস মেসেজটি ঠিকমতো বুঝতে পারিনি। দয়া করে লিখে জানান অথবা আবার পাঠান।",
   file_too_large: "দুঃখিত, ফাইলটি অনেক বড়। ১৬ এমবি-র ছোট ফাইল পাঠান।",
@@ -50,7 +50,7 @@ export const DEFAULT_MESSAGES = {
   unverified_sender: "দুঃখিত, এই মুহূর্তে আপনার নম্বর যাচাই করা যাচ্ছে না। অনুগ্রহ করে কিছুক্ষণ পরে আবার মেসেজ করুন।",
   report_received: "আপনার অভিযোগ পেয়েছি। প্রস্তাবটি বন্ধ করা হয়েছে এবং আমাদের টিম দেখবে।",
   escalated: "আপনার বিষয়টি আমাদের টিমকে জানানো হয়েছে, শীঘ্রই একজন যোগাযোগ করবেন।",
-  profile_complete: "আপনার প্রোফাইল সম্পূর্ণ হয়েছে, ধন্যবাদ! উপযুক্ত প্রস্তাব পেলে জানাব।",
+  profile_complete: "আপনার প্রোফাইল সম্পূর্ণ হয়েছে, ধন্যবাদ! উপযুক্ত প্রস্তাব পেলে আমরা আবার মেসেজ দেব।",
 };
 
 export const DEFAULT_SYSTEM_PROMPT = `তুমি BS, BiyeShadi.live-এর বিনয়ী ও আন্তরিক বিয়ের ঘটক সহকারী। শুধু সুন্দর, সম্মানজনক বাংলায় ছোট করে উত্তর দাও। এটি শুধু বিয়ের জন্য পাত্র-পাত্রী খোঁজার সেবা।
@@ -67,7 +67,7 @@ export const DEFAULT_SYSTEM_PROMPT = `তুমি BS, BiyeShadi.live-এর ব
 8. অভিযোগ বা হয়রানি হলে report_match। মানুষের সাহায্য চাইলে বা তুমি না পারলে escalate_to_human।
 9. শুরুতে সিস্টেম জিজ্ঞেস করে, তৈরি বায়োডাটা আছে কিনা। "না" বা তৈরি নেই বললে get_next_question দিয়ে প্রশ্ন শুরু করো। আছে বললে সেটির ছবি বা PDF এখানে পাঠাতে বলো (চাইলে লিখেও পাঠাতে পারেন)।
 10. "[বায়োডাটা]" দিয়ে শুরু হওয়া বার্তা ব্যবহারকারীর পাঠানো বায়োডাটার ছবি বা PDF থেকে পড়া লেখা। এখান থেকে questions তালিকার যত উত্তর পাওয়া যায় সব save_answer দিয়ে (source=volunteered) আর পাত্র/পাত্রীর চাহিদা save_preference দিয়ে সংরক্ষণ করো; লেখা অস্পষ্ট হলে confidence 0.8-এর কম দাও। তারপর ছোট করে জানাও কোন তথ্যগুলো পেয়েছ, আর get_next_question দিয়ে বাকি প্রশ্ন করো।
-11. মোবাইল নম্বর তুমি নিজে চাইবে না, সংরক্ষণও করবে না; সব প্রশ্ন শেষ হলে শুধু ধন্যবাদ জানাও, সিস্টেম নিজেই নম্বর আর তাতে WhatsApp আছে কিনা জিজ্ঞেস করে। context-এর contact_step "number" হলে ব্যবহারকারীর কথার ছোট উত্তর দিয়ে মোবাইল নম্বরটি দিতে মনে করিয়ে দাও; "whatsapp" হলে নম্বরটিতে WhatsApp আছে কিনা "হ্যাঁ" বা "না" লিখে জানাতে বলো।
+11. মোবাইল নম্বর তুমি নিজে চাইবে না, সংরক্ষণও করবে না; when every question is answered, just thank them in one short line. Do not mention the number, WhatsApp or "the system": the number question is added after your reply automatically. context-এর contact_step "number" হলে ব্যবহারকারীর কথার ছোট উত্তর দিয়ে মোবাইল নম্বরটি দিতে মনে করিয়ে দাও; "whatsapp" হলে নম্বরটিতে WhatsApp আছে কিনা "হ্যাঁ" বা "না" লিখে জানাতে বলো।
 12. Users often answer loosely or indirectly ("he finished honours", "around 5 foot 5", "we are from near Cumilla", "turns 28 this year", Banglish, voice transcripts). Work out the value yourself and save it in the format the question needs (an option value, a number, a range). Do not ask them to repeat it in an exact format; ask again only when the meaning is genuinely unclear. Still reply only in Bengali.
 13. The user has already agreed to the privacy policy, including how and when phone numbers are shared. Do not repeat the phone-number sharing conditions unless the user asks about them.
 14. Never ask whom the profile is for. Never ask what religion they want in a partner and never save a religion preference: matches are always from the same religion automatically.

@@ -70,6 +70,7 @@ describe("question engine", () => {
     const values: Record<string, unknown> = {
       name: "ক", age: 25, gender: "male", created_by_relation: "self", religion: "muslim", marital_status: "never_married", district: "ঢাকা", current_location: "ঢাকা",
       education: "bachelor", profession: "শিক্ষক", job_type: "govt", job_details: "Assistant officer at the district office", family_details: "ভালো", preferred_age_range: [20, 25], preferred_education: ["any"], preferred_job_type: ["any"], preferred_location: ["any"],
+      preferred_looks: "beautiful", partner_expectation: "Kind and honest",
     };
     const completions = [];
     // business_details is asked only of men in business; this one has a government job.

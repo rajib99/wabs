@@ -10,7 +10,7 @@ import type { ChatMessage, LLMProvider, LLMResult, ToolDefinition } from "./type
  */
 type Call = { name: string; args: Record<string, unknown> };
 
-const JOB_WORDS: [RegExp, string][] = [[/আধা[- ]?সরকারি/, "semi_govt"], [/বেসরকারি|প্রাইভেট/, "private"], [/সরকারি/, "govt"], [/ব্যবসা/, "business"]];
+const JOB_WORDS: [RegExp, string][] = [[/আধা[- ]?সরকারি/, "semi_govt"], [/বেসরকারি|প্রাইভেট/, "private"], [/সরকারি/, "govt"], [/ব্যবসা/, "business"], [/বেকার|চাকরি নেই/, "unemployed"]];
 const EDU_WORDS: [RegExp, string][] = [[/পিএইচডি/, "phd"], [/স্নাতকোত্তর|মাস্টার্স/, "masters"], [/স্নাতক|অনার্স|বিএসসি|বিএ\b/, "bachelor"], [/ডিপ্লোমা/, "diploma"], [/এইচএসসি/, "hsc"], [/এসএসসি/, "ssc"]];
 const RELIGION_WORDS: [RegExp, string][] = [[/মুসলিম|মুসলমান|ইসলাম/, "muslim"], [/হিন্দু/, "hindu"], [/খ্রিস্টান/, "christian"], [/বৌদ্ধ/, "buddhist"]];
 const MARITAL_WORDS: [RegExp, string][] = [[/অবিবাহিত/, "never_married"], [/তালাক|ডিভোর্স/, "divorced"], [/বিধবা|বিপত্নীক/, "widowed"]];

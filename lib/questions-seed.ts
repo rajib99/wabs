@@ -1,6 +1,6 @@
 const opt = (value: string, label: string) => ({ value, label });
 
-const JOB = [opt("govt", "সরকারি"), opt("semi_govt", "আধা-সরকারি"), opt("private", "বেসরকারি"), opt("business", "ব্যবসা"), opt("other", "অন্যান্য")];
+const JOB = [opt("govt", "সরকারি"), opt("semi_govt", "আধা-সরকারি"), opt("private", "বেসরকারি"), opt("business", "ব্যবসা"), opt("unemployed", "বেকার"), opt("other", "অন্যান্য")];
 const EDU = [opt("ssc", "এসএসসি"), opt("hsc", "এইচএসসি"), opt("diploma", "ডিপ্লোমা"), opt("bachelor", "স্নাতক"), opt("masters", "স্নাতকোত্তর"), opt("phd", "পিএইচডি"), opt("other", "অন্যান্য")];
 const ANY = opt("any", "যেকোনো");
 
@@ -14,7 +14,7 @@ export const QUESTION_SEED = [
   { key: "current_location", bengaliText: "এখন কোথায় থাকেন?", fieldType: "text" },
   { key: "education", bengaliText: "সর্বোচ্চ শিক্ষাগত যোগ্যতা কী?", fieldType: "select", options: EDU },
   { key: "profession", bengaliText: "পেশা কী?", fieldType: "text" },
-  { key: "job_type", bengaliText: "চাকরির ধরন কী: সরকারি, আধা-সরকারি, বেসরকারি, ব্যবসা, নাকি অন্য?", fieldType: "select", options: JOB },
+  { key: "job_type", bengaliText: "চাকরির ধরন কী: সরকারি, আধা-সরকারি, বেসরকারি, ব্যবসা, বেকার, নাকি অন্য?", fieldType: "select", options: JOB },
   // Male candidates only: the profession in detail, by job type.
   { key: "business_details", bengaliText: "ব্যবসার বিস্তারিত বলুন: কী ধরনের ব্যবসা, কোথায়, আর ব্যবসায় পাত্রের পদ বা ভূমিকা কী?", fieldType: "text", askCondition: {all: [{field: "gender", op: "eq", value: "male"}, {field: "job_type", op: "in", value: ["business"]}]} },
   { key: "job_details", bengaliText: "চাকরির বিস্তারিত বলুন: কোন প্রতিষ্ঠানে, কী পদে, অফিস কোথায়, আর আসলে কী কাজ করেন?", fieldType: "text", askCondition: {all: [{field: "gender", op: "eq", value: "male"}, {field: "job_type", op: "in", value: ["govt", "semi_govt", "private"]}]} },
@@ -25,4 +25,8 @@ export const QUESTION_SEED = [
   { key: "preferred_education", bengaliText: "পাত্র/পাত্রীর শিক্ষাগত যোগ্যতা কেমন হলে ভালো হয়?", fieldType: "multiselect", options: [...EDU, ANY] },
   { key: "preferred_job_type", bengaliText: "পাত্র/পাত্রীর চাকরির ধরন কেমন পছন্দ?", fieldType: "multiselect", options: [...JOB, ANY] },
   { key: "preferred_location", bengaliText: "কোন জেলা বা বিভাগের পাত্র/পাত্রী পছন্দ? যেকোনো হলেও বলুন।", fieldType: "location_list" },
+  // Stored for the agent and admins; not used in scoring (there is no matching self-description to compare with).
+  { key: "preferred_looks", bengaliText: "পাত্র/পাত্রী দেখতে কেমন হলে বিবেচনা করবেন: খুব সুন্দর, সুন্দর, মোটামুটি, নাকি এটা ব্যাপার না?", fieldType: "select", options: [opt("very_beautiful", "খুব সুন্দর"), opt("beautiful", "সুন্দর"), opt("average", "মোটামুটি"), opt("any", "ব্যাপার না")] },
+  // The last question: their own words, for the agent and admins.
+  { key: "partner_expectation", bengaliText: "শেষ প্রশ্ন: আসলে কেমন জীবনসঙ্গী হলে আপনি বিবেচনা করবেন? নিজের ভাষায় একটু বলুন।", fieldType: "text" },
 ].map((q, i) => ({ required: true, options: null as unknown, askCondition: null as unknown, ...q, order: (i + 1) * 10, active: true }));
