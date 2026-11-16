@@ -268,6 +268,20 @@ describe("media", () => {
     expect(await confirmProfilePhoto(P, true)).toMatchObject({ ok: true });
     expect((await db().select().from(schema.photos))[0]!.ownerConfirmedAt).toBeTruthy();
   });
+  it("image at the photo step: taken as theirs, still pending admin approval", async () => {
+    await makeUser(P, "male", {}, { photoStepDone: false });
+    for (const id of ["img1", "img2"]) {
+      await getStorage().put(mockMediaKey(id), new Uint8Array([1]), "image/jpeg");
+      const m = await inbound(P, "", "image", { mediaId: id });
+      await storeMedia(m.id, "photos");
+      await handleImage(m.id);
+    }
+    const photos = await db().select().from(schema.photos);
+    expect(photos).toHaveLength(2);
+    expect(photos.every((p) => p.ownerConfirmedAt && p.approvedByAdmin === null)).toBe(true);
+    expect((await outbound(P)).at(-1)).toContain("আরও ছবি");
+    expect((await user())!.photoStepDone).toBe(false); // the yes/no answer is still to come
+  });
 });
 
 describe("STOP", () => {

@@ -7,7 +7,7 @@ import { msg } from "@/lib/settings";
 import { BANGLISH_YES, squeezeLatin } from "@/lib/safety";
 import { getStorage } from "@/lib/storage";
 
-const { photos, photoRequests } = schema;
+const { photos, photoRequests, users } = schema;
 
 /** Deterministic check: the LLM alone cannot release a photo, the user must have said yes in this message. */
 export function isExplicitYes(text: string): boolean {
@@ -48,12 +48,21 @@ export async function requestPhoto(requester: string, matchId: string) {
 
   const owner = otherParty(match, requester);
   const photo = await approvedPhoto(owner);
+  // The owner said a clear yes at the end of onboarding: a proposal that asks may see the photo without asking again.
+  const [ownerRow] = await d.select({ consent: users.photoShareConsent }).from(users).where(eq(users.phone, owner));
+  const preApproved = !!photo && ownerRow?.consent === true;
   const [row] = await d.insert(photoRequests)
-    .values({ matchId, requester, owner, status: photo ? "pending" : "no_photo", respondedAt: photo ? null : new Date() })
+    .values({ matchId, requester, owner, status: !photo ? "no_photo" : preApproved ? "approved" : "pending", respondedAt: photo && !preApproved ? null : new Date() })
     .onConflictDoNothing().returning();
   if (!row) return { ok: true as const, note: "A photo request for this match was already made." };
   await audit(requester === match.userA ? "user_a" : "user_b", "photo.requested", "match", matchId);
   if (!photo) return { ok: true as const, note: await msg("photo_none") };
+  if (preApproved) {
+    const file = await getStorage().get(photo.r2Key);
+    await sendToUser(requester, await msg("photo_caption"), { image: file, mediaKey: photo.r2Key, dedupeKey: `photo-${row.id}` });
+    await audit("system", "photo.shared", "photo_request", row.id, { by: "advance_consent" });
+    return { ok: true as const, note: "Photo sent: the other party agreed in advance to share it with proposals." };
+  }
 
   const fields = await cardFields(requester);
   await sendToUser(owner, await msg("photo_request_to_owner", { age: fields.age, district: fields.district }), {

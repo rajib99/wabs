@@ -35,6 +35,9 @@ export const users = pgTable("users", {
   contactPhoneSource: text("contact_phone_source"), // channel | messenger_profile | typed
   // Asked right after the contact number; null until answered.
   contactHasWhatsapp: boolean("contact_has_whatsapp"),
+  // The last onboarding step, after WhatsApp: send photos, and say whether a proposal may see them without being asked each time.
+  photoStepDone: boolean("photo_step_done").notNull().default(false),
+  photoShareConsent: boolean("photo_share_consent"), // null until answered
   // A person replied from the Page inbox: BS stays quiet for this user until then.
   humanUntil: ts("human_until"),
   createdAt: createdAt(),

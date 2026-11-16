@@ -50,6 +50,13 @@
       "when": 1794787979784,
       "tag": "0006_profile_questions_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794830647557,
+      "tag": "0007_photo_step",
+      "breakpoints": true
     }
   ]
 }

@@ -136,6 +136,25 @@ describe("photo consent", () => {
     expect(images).toHaveLength(1);
     expect(images[0]!.phone).toBe(A);
   });
+  it("an owner who agreed in advance has the photo sent at once, without being asked", async () => {
+    await makeUser(A, "male"); await makeUser(B, "female", {}, { photoShareConsent: true });
+    await withPhoto(B);
+    const m = await makeMatch(A, B, "shown_to_b");
+    expect(await requestPhoto(A, m.id)).toMatchObject({ ok: true });
+    const [req] = await db().select().from(schema.photoRequests);
+    expect(req!.status).toBe("approved");
+    expect(await outbound(B)).toHaveLength(0);
+    const images = await db().select().from(schema.messages).where(eq(schema.messages.type, "image"));
+    expect(images.map((i) => i.phone)).toEqual([A]);
+  });
+  it("advance consent never releases a photo the admin has not approved", async () => {
+    await makeUser(A, "male"); await makeUser(B, "female", {}, { photoShareConsent: true });
+    await db().insert(schema.photos).values({ phone: B, r2Key: "t/y.jpg", ownerConfirmedAt: new Date(), approvedByAdmin: null });
+    const m = await makeMatch(A, B, "shown_to_b");
+    await requestPhoto(A, m.id);
+    expect((await db().select().from(schema.photoRequests))[0]!.status).toBe("no_photo");
+    expect(await db().select().from(schema.messages).where(eq(schema.messages.type, "image"))).toHaveLength(0);
+  });
   it("a no is relayed politely and nothing is sent", async () => {
     await pair(); await withPhoto(B);
     const m = await makeMatch(A, B, "shown_to_b");

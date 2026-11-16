@@ -107,11 +107,13 @@ describe("contact number comes last", () => {
     expect((await outbound(fb)).at(-1)).toContain("মোবাইল নম্বর");
   });
 
-  it("on a phone-number identity only the WhatsApp question is asked", async () => {
-    await makeUser(P, "male", {}, { contactHasWhatsapp: null });
+  it("on a phone-number identity only the WhatsApp question is asked, then the photo step", async () => {
+    await makeUser(P, "male", {}, { contactHasWhatsapp: null, photoStepDone: false });
     const m = await inbound(P, "হ্যাঁ");
     expect(await preflight(m.id)).toBe("done");
     expect((await db().select().from(schema.users).where(eq(schema.users.phone, P)))[0]!.contactHasWhatsapp).toBe(true);
-    expect((await outbound(P)).at(-2)).toContain("প্রোফাইল সম্পূর্ণ");
+    expect((await outbound(P)).at(-1)).toContain("এক বা একাধিক ছবি");
+    expect(await preflight((await inbound(P, "হ্যাঁ")).id)).toBe("done");
+    expect((await outbound(P)).at(-2)).toContain("প্রোফাইল সম্পূর্ণ"); // then the new-proposal alert request
   });
 });

@@ -6,6 +6,7 @@ import { db, schema } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { endUnderage, eraseUser, isRateLimited, isStopCommand, parseAgeGate, parseYesNo, scrubMessages, sendStopConfirmation } from "@/lib/safety";
 import { getSetting, msg } from "@/lib/settings";
+import { isExplicitYes } from "@/lib/photos";
 import { getStorage } from "@/lib/storage";
 import { normalizeWalletNumber, toAsciiDigits } from "@/lib/text";
 import { completionNotes, contactQuestion, pendingContactStep } from "./contact";
@@ -182,9 +183,12 @@ export async function handleImage(messageId: string) {
   const d = db();
   const [m] = await d.select().from(messages).where(eq(messages.id, messageId));
   if (!m?.mediaKey) return;
+  // At the photo step we have just asked for their photos, so a picture sent now is one; it still goes to admin review.
+  const [user] = await d.select().from(users).where(eq(users.phone, m.phone));
+  const atPhotoStep = pendingContactStep(user) === "photo";
   const [existing] = await d.select().from(schema.photos).where(and(eq(schema.photos.messageId, messageId)));
-  if (!existing) await d.insert(schema.photos).values({ phone: m.phone, r2Key: m.mediaKey, messageId });
-  await sendToUser(m.phone, await msg("photo_received"), { dedupeKey: `photoack-${messageId}` });
+  if (!existing) await d.insert(schema.photos).values({ phone: m.phone, r2Key: m.mediaKey, messageId, ownerConfirmedAt: atPhotoStep ? new Date() : null });
+  await sendToUser(m.phone, await msg(atPhotoStep ? "photo_step_received" : "photo_received"), { dedupeKey: `photoack-${messageId}` });
   await markProcessed(messageId);
 }
 
@@ -242,13 +246,13 @@ export function parseTypedPhone(text: string): string | null {
 const hasManyDigits = (text: string) => (toAsciiDigits(text).match(/\d/g) ?? []).length >= 6;
 
 /**
- * The last onboarding steps, after every profile question: the contact number, then whether it has WhatsApp.
- * A number shared through the channel's own control is taken as verified; a typed one could be anyone's, so it
+ * The last onboarding steps, after every profile question: the contact number, whether it has WhatsApp, then
+ * photos and whether a proposal may see them without being asked each time. A number shared through the channel's own control is taken as verified; a typed one could be anyone's, so it
  * waits for an admin check before the person can be matched or released. Returns false when the message is
  * something else (a question, say): the agent answers it and reminds them.
  */
 async function contactStepReply(
-  m: typeof messages.$inferSelect, user: typeof users.$inferSelect, step: "number" | "whatsapp", gateKey: string,
+  m: typeof messages.$inferSelect, user: typeof users.$inferSelect, step: "number" | "whatsapp" | "photo", gateKey: string,
 ): Promise<boolean> {
   const d = db();
   const phone = m.phone;
@@ -274,6 +278,8 @@ async function contactStepReply(
     return true;
   }
 
+  if (step === "photo") return photoStepReply(m, user, gateKey);
+
   let answer = parseYesNo(text);
   if (answer === "unclear" && !text.includes("?")) {
     answer = await interpretGateReply("whatsapp", await contactQuestion("whatsapp", user.contactPhone), text);
@@ -284,10 +290,30 @@ async function contactStepReply(
     return true;
   }
   await d.update(users).set({ contactHasWhatsapp: answer === "yes", updatedAt: new Date() }).where(eq(users.phone, phone));
+  await sendToUser(phone, await contactQuestion("photo", null), { dedupeKey: gateKey, deferOnFailure: true });
+  // Matching skipped this person while the number was missing; start it now. Photos are not needed for it.
+  if (user.contactPhoneVerified) await inngest.send({ id: `contact-${m.id}`, name: "profile/updated", data: { phone } });
+  return true;
+}
+
+/**
+ * The photo step: may a proposal that asks see their photo without asking them each time? A yes must be explicit
+ * (as for any photo release); no LLM reading counts. "No" keeps the per-request question. Photos themselves arrive
+ * as images and are handled by handleImage.
+ */
+async function photoStepReply(m: typeof messages.$inferSelect, user: typeof users.$inferSelect, gateKey: string): Promise<boolean> {
+  const phone = m.phone;
+  const text = m.rawText ?? "";
+  const yesNo = parseYesNo(text);
+  const answer = yesNo === "no" ? "no" : yesNo === "yes" || isExplicitYes(text) ? "yes" : "unclear";
+  if (answer === "unclear") {
+    if (text.trim().split(/\s+/).length > 3 || text.includes("?")) return false; // a sentence or a question: the agent answers and asks again
+    await sendToUser(phone, await msg("photo_step_retry"), { dedupeKey: gateKey, deferOnFailure: true });
+    return true;
+  }
+  await db().update(users).set({ photoStepDone: true, photoShareConsent: answer === "yes", updatedAt: new Date() }).where(eq(users.phone, phone));
   const done = await msg(user.contactPhoneVerified ? "contact_done" : "contact_done_unverified");
   await sendToUser(phone, [done, ...(await completionNotes(phone))].join("\n\n"), { dedupeKey: gateKey, deferOnFailure: true });
   await askForNotifications(phone); // onboarding is done: the natural moment to ask about new-proposal alerts
-  // Matching skipped this person while the number was missing; start it now.
-  if (user.contactPhoneVerified) await inngest.send({ id: `contact-${m.id}`, name: "profile/updated", data: { phone } });
   return true;
 }

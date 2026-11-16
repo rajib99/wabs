@@ -40,6 +40,7 @@ export default async function UserPage({ params }: { params: Promise<{ phone: st
           {user.contactPhone && <Badge>{user.contactPhoneVerified ? "যাচাইকৃত" : "যাচাই হয়নি"}</Badge>}
           {user.contactPhoneSource && <Badge>{user.contactPhoneSource}</Badge>}
           {user.contactHasWhatsapp != null && <Badge>{user.contactHasWhatsapp ? "WhatsApp আছে" : "WhatsApp নেই"}</Badge>}
+          {user.photoShareConsent != null && <Badge>{user.photoShareConsent ? "ছবি দেখানোর অনুমতি আছে" : "ছবি: প্রতিবার অনুমতি"}</Badge>}
           {user.contactPhone && (
             <ActionForm action={setContactVerifiedAction} className="ml-auto">
               <input type="hidden" name="phone" value={phone} /><input type="hidden" name="verified" value={String(!user.contactPhoneVerified)} />

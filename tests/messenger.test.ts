@@ -225,7 +225,7 @@ describe("sending", () => {
 describe("contact number step", () => {
   // Every profile question answered, no number yet: the state right after the last question.
   const answeredAll = (fields: Partial<typeof schema.users.$inferInsert> = {}) =>
-    makeUser(KEY, "male", {}, { contactPhone: null, contactPhoneVerified: false, contactPhoneSource: null, contactHasWhatsapp: null, ...fields });
+    makeUser(KEY, "male", {}, { contactPhone: null, contactPhoneVerified: false, contactPhoneSource: null, contactHasWhatsapp: null, photoStepDone: false, ...fields });
   const step = async (text: string, sharedPhone?: string) => {
     const m = await inbound(KEY, text, "text", sharedPhone ? { sharedPhone } : {});
     return (await import("@/lib/conversation/pipeline")).preflight(m.id);
@@ -252,14 +252,32 @@ describe("contact number step", () => {
     expect(sends().at(-1).message.text).toContain("WhatsApp");
     expect(sends().at(-1).message.text).toContain("01712345678");
   });
-  it("the WhatsApp answer is stored, onboarding ends and matching starts", async () => {
+  it("the WhatsApp answer is stored, matching starts and the photo step is asked", async () => {
     await answeredAll({ contactPhone: "+8801712345678", contactPhoneVerified: true, contactPhoneSource: "messenger_profile" });
     expect(await step("না")).toBe("done");
     expect((await user()).contactHasWhatsapp).toBe(false);
+    expect(sends().at(-1).message.text).toContain("এক বা একাধিক ছবি");
+    expect(sentEvents().some((e) => e.name === "profile/updated" && e.data.phone === KEY)).toBe(true);
+  });
+  it("a clear yes at the photo step records advance consent and ends onboarding", async () => {
+    await answeredAll({ contactPhone: "+8801712345678", contactPhoneVerified: true, contactHasWhatsapp: true });
+    expect(await step("হ্যাঁ")).toBe("done");
+    expect(await user()).toMatchObject({ photoStepDone: true, photoShareConsent: true });
     expect(sends().at(-2).message.text).toContain("প্রোফাইল সম্পূর্ণ");
     // Onboarding done: the natural pause to ask for a new-proposal alert.
     expect(sends().at(-1).message.attachment.payload).toMatchObject({ template_type: "one_time_notif_req", payload: "OTN:new_proposal" });
-    expect(sentEvents().some((e) => e.name === "profile/updated" && e.data.phone === KEY)).toBe(true);
+  });
+  it("a no at the photo step keeps the per-request question", async () => {
+    await answeredAll({ contactPhone: "+8801712345678", contactPhoneVerified: true, contactHasWhatsapp: true });
+    await step("না");
+    expect(await user()).toMatchObject({ photoStepDone: true, photoShareConsent: false });
+  });
+  it("an unclear photo answer asks again; a question goes to the agent", async () => {
+    await answeredAll({ contactPhone: "+8801712345678", contactPhoneVerified: true, contactHasWhatsapp: true });
+    expect(await step("পরে দেখি")).toBe("done");
+    expect(sends().at(-1).message.text).toContain("\"হ্যাঁ\" বা \"না\"");
+    expect(await step("ছবি কে কে দেখবে?")).toBe("agent");
+    expect(await user()).toMatchObject({ photoStepDone: false, photoShareConsent: null });
   });
   it("a typed number is accepted but must be checked by an admin before matching", async () => {
     await answeredAll();
@@ -270,6 +288,7 @@ describe("contact number step", () => {
     expect(e!.reason).toContain("+8801712345678");
     await step("হ্যাঁ");
     expect((await user()).contactHasWhatsapp).toBe(true);
+    await step("না"); // the photo step
     expect(sends().at(-2).message.text).toContain("যাচাই");
     expect(sentEvents().some((ev) => ev.name === "profile/updated")).toBe(false);
   });
