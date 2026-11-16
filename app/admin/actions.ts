@@ -303,8 +303,9 @@ export async function saveMatchingSettingsAction(form: FormData): Promise<Action
       match_threshold: z.number().min(0).max(100).parse(num(form, "match_threshold")),
       daily_intro_limit: z.number().int().min(0).max(100).parse(num(form, "daily_intro_limit")),
       match_response_timeout_seconds: Math.round(z.number().positive().parse(num(form, "match_response_hours")) * 3600),
-      first_payment_timeout_seconds: Math.round(z.number().positive().parse(num(form, "first_payment_hours")) * 3600),
-      second_payment_timeout_seconds: Math.round(z.number().positive().parse(num(form, "second_payment_hours")) * 3600),
+      max_open_matches: z.number().int().min(1).max(20).parse(num(form, "max_open_matches")),
+      payment_timeout_seconds: Math.round(z.number().positive().parse(num(form, "payment_hours")) * 3600),
+      call_followup_seconds: Math.round(z.number().positive().parse(num(form, "call_followup_hours")) * 3600),
       min_match_age: {
         male: z.number().int().min(18).parse(num(form, "min_age_male")),
         female: z.number().int().min(18).parse(num(form, "min_age_female")),

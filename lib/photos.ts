@@ -44,7 +44,7 @@ export async function requestPhoto(requester: string, matchId: string) {
   const d = db();
   const match = await getMatch(matchId);
   if (!match || !isVisibleTo(match, requester)) return { ok: false as const, error: "match not found" };
-  if (isClosed(match.state) && match.state !== "contact_released") return { ok: false as const, error: "match is closed" };
+  if (isClosed(match.state)) return { ok: false as const, error: "match is closed" };
 
   const owner = otherParty(match, requester);
   const photo = await approvedPhoto(owner);
@@ -79,7 +79,7 @@ export async function respondToPhotoRequest(owner: string, requestId: string, al
   if (allow && !isExplicitYes(userText)) return { ok: false as const, error: "explicit yes is required: ask the owner to answer yes or no" };
 
   const match = await getMatch(req.matchId);
-  if (!match || (isClosed(match.state) && match.state !== "contact_released")) return { ok: false as const, error: "match is closed" };
+  if (!match || isClosed(match.state)) return { ok: false as const, error: "match is closed" };
 
   if (!allow) {
     await d.update(photoRequests).set({ status: "denied", respondedAt: new Date() }).where(eq(photoRequests.id, req.id));

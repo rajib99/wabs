@@ -348,12 +348,14 @@ describe("release on Messenger", () => {
   it("both sides receive each other's contact number, never a Messenger ID", async () => {
     await makeUser(KEY, "male", {}, { contactPhone: "+8801712345678", contactPhoneVerified: true });
     await makeUser("fb:222", "female", {}, { contactPhone: "+8801812345678", contactPhoneVerified: true });
-    const m = await makeMatch(KEY, "fb:222", "payment_pending");
+    const m = await makeMatch(KEY, "fb:222", "both_interested");
     await db().insert(schema.payments).values([
       { matchId: m.id, payerPhone: KEY, trxId: "AAAA111111", amount: 300, status: "verified" },
       { matchId: m.id, payerPhone: "fb:222", trxId: "BBBB111111", amount: 300, status: "verified" },
     ]);
-    await (await import("@/lib/payments")).settleVerifiedPayment(m.id, KEY);
+    const { settleVerifiedPayment } = await import("@/lib/payments");
+    await settleVerifiedPayment(m.id, KEY);
+    await settleVerifiedPayment(m.id, "fb:222");
     const texts = sends().map((s) => s.message?.text ?? "");
     expect(texts.some((t) => t.includes("+8801812345678"))).toBe(true);
     expect(texts.some((t) => t.includes("+8801712345678"))).toBe(true);

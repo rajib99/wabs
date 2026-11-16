@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS } from "@/lib/settings-defaults";
 export const sentEvents = () => (globalThis as unknown as { __sentEvents: { name: string; id?: string; data: Record<string, unknown> }[] }).__sentEvents;
 
 export async function resetDb() {
-  await db().execute(sql`TRUNCATE users, messages, message_embeddings, questions, profile_answers, preferences, photos, matches, photo_requests, payments, settings, admin_users, audit_log, escalations CASCADE`);
+  await db().execute(sql`TRUNCATE users, messages, message_embeddings, questions, profile_answers, preferences, photos, matches, match_questions, photo_requests, payments, settings, admin_users, audit_log, escalations CASCADE`);
   await db().insert(schema.questions).values(QUESTION_SEED);
   await db().insert(schema.settings).values(Object.entries({ ...DEFAULT_SETTINGS, bkash_number: "01700000000" }).map(([key, value]) => ({ key, value })));
 }
@@ -30,7 +30,7 @@ export async function makeUser(phone: string, gender: "male" | "female", overrid
 
 export async function makeMatch(a: string, b: string, state: string, score = 90) {
   const stamps: Record<string, string> = {};
-  const order = ["proposed", "shown_to_a", "a_interested", "shown_to_b", "b_interested", "both_interested", "payment_pending"];
+  const order = ["proposed", "offered_to_a", "shown_to_a", "a_interested", "offered_to_b", "shown_to_b", "both_interested", "contact_released"];
   for (const s of order) { stamps[s] = new Date().toISOString(); if (s === state) break; }
   const [row] = await db().insert(schema.matches).values({ userA: a, userB: b, score, breakdown: [], state, stateTimestamps: stamps }).returning();
   return row!;

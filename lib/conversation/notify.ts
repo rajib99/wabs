@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getChannel } from "@/lib/channel";
 import { db, schema } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { isClosed, visibleMatches } from "@/lib/matches";
+import { stepFor, visibleMatches } from "@/lib/matches";
 import { pendingContactStep } from "./contact";
 import { notificationTopics, tokenHistory } from "./notification-tokens";
 import { sendToUser, type SendOutcome } from "./outbound";
@@ -12,11 +12,7 @@ const TITLE_MAX = 65;
 
 /** True while the person has answered a proposal and is waiting on the other side, a payment or a release. */
 async function waitingOnProposal(phone: string): Promise<boolean> {
-  return (await visibleMatches(phone)).some((m) => {
-    if (isClosed(m.state)) return false;
-    const yourTurn = (m.userA === phone && m.state === "shown_to_a") || (m.userB === phone && m.state === "shown_to_b");
-    return !yourTurn;
-  });
+  return (await visibleMatches(phone)).some((m) => ["waiting_for_other_side", "both_interested"].includes(stepFor(m, phone)));
 }
 
 /**

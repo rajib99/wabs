@@ -95,12 +95,23 @@ function firstRound(text: string, ctx: AgentContext, lastAssistant: string): Cal
   const last4 = (t.match(/01\d{9}/)?.[0] ?? t.match(/\b\d{4}\b/)?.[0])?.slice(-4);
   const trx = t.match(/\b(?=[A-Z0-9]*[A-Z])[A-Z0-9]{8,12}\b/)?.[0];
   if (payable && trx) return [{ name: "submit_payment", args: { match_id: payable.match_id, trx_id: trx, ...(last4 ? { wallet_last4: last4 } : {}) } }];
+  // No Transaction ID: the last 4 digits and when it was sent.
+  if (payable && !trx && last4 && /পাঠিয়েছি|পাঠালাম/.test(t)) return [{ name: "submit_payment", args: { match_id: payable.match_id, wallet_last4: last4, paid_details: text } }];
 
-  const turnMatch = ctx.active_matches.find((m) => m.your_turn) ?? ctx.active_matches[0];
+  const offered = ctx.active_matches.find((m) => m.step === "offered");
+  const viewing = ctx.active_matches.find((m) => m.step === "viewing");
+  const turnMatch = viewing ?? offered ?? ctx.active_matches[0];
+  const question = ctx.pending_questions_for_you[0];
+  if (question && /^উত্তর[:ঃ]/.test(t.trim())) return [{ name: "answer_question", args: { question_id: question.question_id, answer: t.trim().replace(/^উত্তর[:ঃ]\s*/, "") } }];
+  if (turnMatch && /^প্রশ্ন[:ঃ]/.test(t.trim())) return [{ name: "ask_other_party", args: { match_id: turnMatch.match_id, question: t.trim().replace(/^প্রশ্ন[:ঃ]\s*/, "") } }];
+  if (/আগের প্রস্তাব/.test(t)) return [{ name: "get_past_matches", args: {} }];
+  if (/আরও প্রস্তাব/.test(t) || (yes && lastAssistant.includes("আরও প্রস্তাব"))) return [{ name: "request_more_matches", args: {} }];
+  if (offered && (yes || no) && offered === turnMatch) return [{ name: "respond_to_match", args: { match_id: offered.match_id, action: yes ? "see_details" : "decline" } }];
   if (turnMatch && /রিপোর্ট|হয়রানি/.test(t)) return [{ name: "report_match", args: { match_id: turnMatch.match_id, reason: text } }];
   if (turnMatch && /ছবি/.test(t)) return [{ name: "request_photo", args: { match_id: turnMatch.match_id } }];
+  if (turnMatch && /নম্বর/.test(t) && !trx) return [{ name: "request_number", args: { match_id: turnMatch.match_id } }];
   if (turnMatch && /আগ্রহী নই|আগ্রহ নেই/.test(t)) return [{ name: "respond_to_match", args: { match_id: turnMatch.match_id, action: "decline" } }];
-  if (turnMatch?.your_turn && /আগ্রহী/.test(t)) return [{ name: "respond_to_match", args: { match_id: turnMatch.match_id, action: "interested" } }];
+  if (viewing && /আগ্রহী|পছন্দ/.test(t)) return [{ name: "respond_to_match", args: { match_id: viewing.match_id, action: "interested" } }];
   if (/সাহায্য|মানুষের সাথে/.test(t)) return [{ name: "escalate_to_human", args: { reason: text } }];
 
   const asked = ctx.questions.find((q) => !q.answered && lastAssistant.includes(q.text));

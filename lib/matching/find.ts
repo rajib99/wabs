@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { audit } from "@/lib/audit";
+import { OPEN_FOR_A, OPEN_FOR_B } from "@/lib/matches";
 import { db, schema } from "@/lib/db";
 import { answersToValues, loadAnswers } from "@/lib/profile";
 import { getSetting } from "@/lib/settings";
@@ -25,6 +26,7 @@ export async function hardFilteredCandidates(phone: string, gender: string, limi
       AND c.gender = ${opposite}
       AND c.status = 'active' AND c.profile_complete AND NOT c.blocked
       AND c.contact_phone IS NOT NULL AND c.contact_phone_verified
+      AND NOT c.matching_paused
       -- Same religion only, always: nobody is asked for a religion preference. A missing religion never passes.
       AND EXISTS (
         SELECT 1 FROM profile_answers mine
@@ -61,6 +63,16 @@ async function introductionsToday(phone: string): Promise<number> {
   return (res.rows[0] as { n: number }).n;
 }
 
+/** Proposals in progress for this person: as a, from the start; as b, once they have been asked. */
+export async function openMatchCount(phone: string): Promise<number> {
+  const res = await db().execute(sql`
+    SELECT count(*)::int AS n FROM matches
+    WHERE (user_a = ${phone} AND state IN (${sql.join(OPEN_FOR_A.map((st) => sql`${st}`), sql`, `)}))
+       OR (user_b = ${phone} AND state IN (${sql.join(OPEN_FOR_B.map((st) => sql`${st}`), sql`, `)}))
+  `);
+  return (res.rows[0] as { n: number }).n;
+}
+
 export type NewMatch = { id: string; score: number };
 
 /** Creates proposed matches for one user. Returns the rows created so the caller can emit events. */
@@ -69,18 +81,21 @@ export async function findMatches(phone: string): Promise<NewMatch[]> {
   const [me] = await d.select().from(users).where(eq(users.phone, phone));
   if (!me || me.blocked || me.status !== "active" || !me.profileComplete || !me.gender) return [];
   if (!me.contactPhone || !me.contactPhoneVerified) return []; // starts once an admin has checked a typed number
+  if (me.matchingPaused) return []; // talking to someone; resumes when they ask for more proposals
 
-  const [rules, threshold, dailyLimit, minAges] = await Promise.all([
+  const [rules, threshold, dailyLimit, minAges, maxOpen] = await Promise.all([
     getSetting<FieldRule[]>("match_weights"),
     getSetting<number>("match_threshold"),
     getSetting<number>("daily_intro_limit"),
     getSetting<MinAges>("min_match_age"),
+    getSetting<number>("max_open_matches"),
   ]);
 
   const myAnswers = answersToValues(await loadAnswers(phone));
   if (!meetsMinimumAge(me.gender, myAnswers, minAges)) return [];
 
-  let myRemaining = dailyLimit - (await introductionsToday(phone));
+  // One proposal at a time by default: the next is sent when one closes or they ask for more.
+  let myRemaining = Math.min(dailyLimit - (await introductionsToday(phone)), maxOpen - (await openMatchCount(phone)));
   if (myRemaining <= 0) return [];
 
   const candidates = await hardFilteredCandidates(phone, me.gender);
@@ -107,6 +122,7 @@ export async function findMatches(phone: string): Promise<NewMatch[]> {
   for (const c of ranked) {
     if (myRemaining <= 0) break;
     if ((await introductionsToday(c.phone)) >= dailyLimit) continue;
+    if ((await openMatchCount(c.phone)) >= maxOpen) continue;
     const [row] = await d.insert(schema.matches).values({
       userA: phone, userB: c.phone, score: c.score, breakdown: c.breakdown, state: "proposed",
       stateTimestamps: { proposed: new Date().toISOString() },

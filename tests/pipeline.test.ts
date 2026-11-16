@@ -191,13 +191,13 @@ describe("sends that fail mid-step", () => {
     await expect(advanceMatch(match.id, "proposed")).rejects.toThrow(); // Inngest retries the step
     spy.mockResolvedValue({ waMessageId: "w2" });
     await advanceMatch(match.id, "proposed");
-    expect((await getMatch(match.id))!.state).toBe("shown_to_a");
+    expect((await getMatch(match.id))!.state).toBe("offered_to_a");
     expect(spy).toHaveBeenCalled();
   });
   it("during an outage both released numbers stay queued, whichever payer's event retries", async () => {
     const OTHER = "+8801711000598";
     await makeUser(P, "male"); await makeUser(OTHER, "female");
-    const match = await makeMatch(P, OTHER, "payment_pending");
+    const match = await makeMatch(P, OTHER, "both_interested");
     await db().insert(schema.payments).values([
       { matchId: match.id, payerPhone: P, trxId: "AAAA111111", amount: 300, status: "verified" },
       { matchId: match.id, payerPhone: OTHER, trxId: "BBBB111111", amount: 300, status: "verified" },
@@ -205,8 +205,9 @@ describe("sends that fail mid-step", () => {
     down();
     await settleVerifiedPayment(match.id, P);
     await settleVerifiedPayment(match.id, P);
+    await settleVerifiedPayment(match.id, OTHER);
     const rows = await db().select().from(schema.messages).where(eq(schema.messages.status, "queued"));
-    expect(rows.map((r) => r.dedupeKey).sort()).toEqual([`release-${match.id}-${P}`, `release-${match.id}-${OTHER}`].sort());
+    expect(rows.map((r) => r.dedupeKey).filter((k) => k?.startsWith("release-")).sort()).toEqual([`release-${match.id}-${P}`, `release-${match.id}-${OTHER}`].sort());
   });
 });
 
@@ -320,7 +321,7 @@ describe("STOP", () => {
   it("keeps a verified payment for the books without the wallet number, and starts fresh on return", async () => {
     const OTHER = "+8801711000503";
     await makeUser(P, "male"); await makeUser(OTHER, "female");
-    const m = await makeMatch(P, OTHER, "payment_pending");
+    const m = await makeMatch(P, OTHER, "both_interested");
     await db().insert(schema.payments).values({ matchId: m.id, payerPhone: P, senderWalletNumber: "01712345678", trxId: "ABCD123456", amount: 300, status: "verified" });
     await audit("admin@x", "user.blocked", "user", P);
     await eraseUser(P);

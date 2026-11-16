@@ -38,6 +38,8 @@ export const users = pgTable("users", {
   // The last onboarding step, after WhatsApp: send photos, and say whether a proposal may see them without being asked each time.
   photoStepDone: boolean("photo_step_done").notNull().default(false),
   photoShareConsent: boolean("photo_share_consent"), // null until answered
+  // Set when a number is released to this person (they are talking to someone); cleared when they ask for more matches.
+  matchingPaused: boolean("matching_paused").notNull().default(false),
   // A person replied from the Page inbox: BS stays quiet for this user until then.
   humanUntil: ts("human_until"),
   createdAt: createdAt(),
@@ -141,6 +143,8 @@ export const matches = pgTable("matches", {
   state: text("state").notNull().default("proposed"),
   stateTimestamps: jsonb("state_timestamps").$type<Record<string, string>>().notNull().default({}),
   closeReason: text("close_reason"),
+  // Who asked for the other's number. Payment details go to them once both sides are interested.
+  numberRequestedBy: text("number_requested_by").array().notNull().default(sql`'{}'::text[]`),
   createdAt: createdAt(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 }, (t) => [
@@ -160,6 +164,19 @@ export const photoRequests = pgTable("photo_requests", {
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("photo_requests_match_requester_idx").on(t.matchId, t.requester)]);
 
+/** Questions one side asks the other through BS. Delivered once the other side can see the match. */
+export const matchQuestions = pgTable("match_questions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+  asker: phoneFk("asker"),
+  question: text("question").notNull(),
+  answer: text("answer"),
+  status: text("status").notNull().default("pending"), // pending | delivered | answered
+  deliveredAt: ts("delivered_at"),
+  answeredAt: ts("answered_at"),
+  createdAt: createdAt(),
+}, (t) => [index("match_questions_match_idx").on(t.matchId, t.status)]);
+
 export const payments = pgTable("payments", {
   id: uuid("id").primaryKey().defaultRandom(),
   matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
@@ -167,7 +184,10 @@ export const payments = pgTable("payments", {
   method: text("method").notNull().default("bkash"),
   // Only the last 4 digits: Meta's policy forbids asking for financial account numbers in messages.
   senderWalletNumber: text("sender_wallet_number"),
-  trxId: text("trx_id").notNull().unique(),
+  // Null when the payer had no Transaction ID and gave the last 4 digits and time instead.
+  trxId: text("trx_id").unique(),
+  // What the payer said about the payment (time, amount) when there was no Transaction ID. For the admin only.
+  claimDetails: text("claim_details"),
   amount: integer("amount").notNull(),
   status: text("status").notNull().default("pending"), // pending | verified | rejected
   note: text("note"),

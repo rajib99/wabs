@@ -8,12 +8,9 @@ import {
   askToRetype, documentUnreadable, embedMessage, handleImage, markProcessed, messageText, preflight, readDocument, storeMedia, transcribeMessage,
 } from "@/lib/conversation/pipeline";
 import { db, schema } from "@/lib/db";
-import { closeMatch, advanceMatch, getMatch, type MatchState, transition } from "@/lib/matches";
+import { closeMatch, advanceMatch, type MatchState } from "@/lib/matches";
 import { activeUserPhones, findMatches } from "@/lib/matching/find";
-import {
-  handleFirstPaymentTimeout, handleSecondPaymentTimeout, notifyAfterFirstPayment, sendPaymentInstructions, settleVerifiedPayment, verifiedPayers,
-} from "@/lib/payments";
-import { audit } from "@/lib/audit";
+import { hasOpenPayments, settleVerifiedPayment } from "@/lib/payments";
 import { getSetting, msg } from "@/lib/settings";
 import { eq } from "drizzle-orm";
 import { isConfigError } from "@/lib/env";
@@ -155,75 +152,48 @@ export const matchAdvance = inngest.createFunction(
   },
 );
 
-/** One run per match per waiting state: expires it unless the state moves on first. */
+/** States in which a match waits on someone. Each gets one run that expires the match unless the state moves on first. */
+const WAITING_STATES = ["offered_to_a", "shown_to_a", "offered_to_b", "shown_to_b", "both_interested"];
+
 export const matchExpiry = inngest.createFunction(
   {
     id: "match-expiry",
     retries: 3,
-    triggers: [{ event: "match/state.changed", if: "event.data.state == 'shown_to_a' || event.data.state == 'shown_to_b'" }],
+    triggers: [{ event: "match/state.changed", if: WAITING_STATES.map((st) => `event.data.state == '${st}'`).join(" || ") }],
   },
   async ({ event, step }) => {
     const { matchId, state } = event.data as { matchId: string; state: MatchState };
-    const seconds = await step.run("timeout", () => getSetting<number>("match_response_timeout_seconds"));
+    // Both interested waits on a payment, which gets longer than an answer.
+    const seconds = await step.run("timeout", () =>
+      getSetting<number>(state === "both_interested" ? "payment_timeout_seconds" : "match_response_timeout_seconds"));
     const changed = await step.waitForEvent("wait-for-change", {
       event: "match/state.changed",
       timeout: `${seconds}s`,
       if: "async.data.matchId == event.data.matchId",
     });
     if (changed) return { expired: false };
-    // onlyFrom makes this safe if the state changed just before the wait began.
-    const expired = await step.run("expire", () => closeMatch(matchId, "expired", "system", "no_response", undefined, state));
+    const expired = await step.run("expire", async () => {
+      // A payment waiting for the admin, or already verified, keeps the match open.
+      if (state === "both_interested" && (await hasOpenPayments(matchId))) return false;
+      // onlyFrom makes this safe if the state changed just before the wait began.
+      return closeMatch(matchId, "expired", "system", state === "both_interested" ? "no_payment" : "no_response", undefined, state);
+    });
     return { expired };
   },
 );
 
-export const paymentFlow = inngest.createFunction(
-  { id: "payment-flow", retries: 3, triggers: [{ event: "match/both_interested" }] },
+/** Some hours after a number is released: how did the call go, and do they want more proposals? */
+export const callFollowup = inngest.createFunction(
+  { id: "call-followup", retries: 3, triggers: [{ event: "contact/released" }] },
   async ({ event, step }) => {
-    const { matchId } = event.data as { matchId: string };
-
-    const timers = await step.run("start", async () => {
-      const match = await getMatch(matchId);
-      if (!match) return null;
-      await transition(matchId, "payment_pending", "system");
-      await sendPaymentInstructions(match);
-      await audit("system", "payment.instructions_sent", "match", matchId);
-      return {
-        first: await getSetting<number>("first_payment_timeout_seconds"),
-        second: await getSetting<number>("second_payment_timeout_seconds"),
-      };
+    const { matchId, phone } = event.data as { matchId: string; phone: string };
+    const seconds = await step.run("delay", () => getSetting<number>("call_followup_seconds"));
+    await step.sleep("wait-for-call", `${seconds}s`);
+    await step.run("ask", async () => {
+      const [user] = await db().select({ status: schema.users.status }).from(schema.users).where(eq(schema.users.phone, phone));
+      if (user?.status !== "active") return "gone"; // erased or stopped in the meantime
+      return sendToUser(phone, await msg("call_followup"), { dedupeKey: `followup-${matchId}-${phone}`, template: "match_update", deferOnFailure: true });
     });
-    if (!timers) return { outcome: "missing" };
-
-    const firstEvent = await step.waitForEvent("wait-first-payment", {
-      event: "payment/verified",
-      timeout: `${timers.first}s`,
-      if: "async.data.matchId == event.data.matchId",
-    });
-
-    const payer = await step.run("resolve-first-payer", async () => {
-      if (firstEvent) return (firstEvent.data as { phone: string }).phone;
-      if (await handleFirstPaymentTimeout(matchId)) return null;
-      return (await verifiedPayers(matchId))[0] ?? null; // verified just before the wait began
-    });
-    if (!payer) return { outcome: "expired_no_payment" };
-
-    await step.run("notify-first-payment", async () => {
-      const match = await getMatch(matchId);
-      if (match?.state !== "payment_pending") return;
-      await audit("system", "payment.first_verified", "match", matchId);
-      await notifyAfterFirstPayment(match, payer);
-    });
-
-    const second = await step.waitForEvent("wait-second-payment", {
-      event: "payment/verified",
-      timeout: `${timers.second}s`,
-      if: `async.data.matchId == event.data.matchId && async.data.phone != '${payer.replace(/[^+\d]/g, "")}'`,
-    });
-    if (second) return { outcome: "both_paid" }; // payment-settle has released both numbers
-
-    const outcome = await step.run("second-timeout", () => handleSecondPaymentTimeout(matchId, payer));
-    return { outcome };
   },
 );
 
@@ -253,5 +223,5 @@ export const outboundQueue = inngest.createFunction(
 
 export const functions = [
   outboundQueue,
-  waMessageReceived, embedMessageFn, findMatchesFn, nightlyMatching, matchAdvance, matchExpiry, paymentFlow, paymentSettle,
+  waMessageReceived, embedMessageFn, findMatchesFn, nightlyMatching, matchAdvance, matchExpiry, paymentSettle, callFollowup,
 ];

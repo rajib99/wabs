@@ -32,23 +32,24 @@ export const DEFAULT_MESSAGES = {
   fallback: "দুঃখিত, এই মুহূর্তে একটু সমস্যা হচ্ছে। অনুগ্রহ করে একটু পরে আবার লিখুন।",
   rate_limited: "আপনি খুব দ্রুত অনেক মেসেজ পাঠাচ্ছেন। অনুগ্রহ করে একটু পরে আবার লিখুন।",
   stop_confirmed: "আপনার প্রোফাইল, ছবি ও কথোপকথন মুছে ফেলা হয়েছে। আমরা আর মেসেজ পাঠাব না। আবার ব্যবহার করতে চাইলে যেকোনো সময় মেসেজ করবেন।",
-  match_card:
-    "আপনার জন্য একটি প্রস্তাব এসেছে ({match_percent}% মিল):\n• বয়স: {age}\n• শিক্ষা: {education}\n• পেশা: {profession}\n• চাকরির ধরন: {job_type}\n• জেলা: {district}\n• পরিবার: {family}\n\nআপনি কি আগ্রহী? \"আগ্রহী\" বা \"আগ্রহী নই\" লিখুন। ছবি দেখতে চাইলে \"ছবি\" লিখুন।",
+  match_offer: "আপনার জন্য একটি সম্ভাব্য প্রস্তাব পাওয়া গেছে ({match_percent}% মিল)। বিস্তারিত জানতে চান? \"হ্যাঁ\" বা \"না\" লিখুন।",
+  match_offer_b: "একটি প্রস্তাবের পক্ষ আপনার প্রোফাইল দেখে আগ্রহ জানিয়েছেন ({match_percent}% মিল)। তাঁর বিস্তারিত জানতে চান? \"হ্যাঁ\" বা \"না\" লিখুন।",
+  match_details: "প্রস্তাবের বিস্তারিত ({match_percent}% মিল):\n• বয়স: {age}\n• শিক্ষা: {education}\n• পেশা: {profession}\n• চাকরির ধরন: {job_type}\n• জেলা: {district}\n• পরিবার: {family}\n\nপ্রস্তাবটি কেমন লাগল জানাবেন। অন্য পক্ষকে কিছু জিজ্ঞেস করতে চাইলে লিখুন, আমি উত্তর জেনে দেব। ছবি দেখতে চাইলে \"ছবি\", ফোন নম্বর চাইলে \"নম্বর\" লিখুন। আগ্রহ না থাকলে \"আগ্রহী নই\" লিখুন।",
+  match_question_to_owner: "আপনার একটি প্রস্তাবের পক্ষ জানতে চেয়েছেন: \"{question}\"\nউত্তর লিখে দিন, আমি তাঁকে পৌঁছে দেব।",
+  match_answer_to_asker: "আপনার প্রশ্ন \"{question}\"-এর উত্তরে অন্য পক্ষ জানিয়েছেন: \"{answer}\"",
+  match_accepted: "সুখবর! অন্য পক্ষও আপনার প্রস্তাবে আগ্রহী। ফোন নম্বর চাইলে \"নম্বর\" লিখুন।",
+  number_payment_request: "অন্য পক্ষের ফোন নম্বর পেতে bKash-এ {amount} টাকা Send Money করুন: {bkash_number}\nপাঠানোর পর Transaction ID এখানে লিখুন। Transaction ID না থাকলে যে নম্বর থেকে পাঠিয়েছেন তার শুধু শেষ ৪ সংখ্যা আর কখন পাঠিয়েছেন তা লিখুন। পুরো নম্বর, পিন বা OTP কখনো পাঠাবেন না।",
+  payment_claim_received: "ধন্যবাদ! আমরা আগে আপনার লেনদেনটি যাচাই করব, তারপর অন্য পক্ষের ফোন নম্বর পাঠিয়ে দেব।",
+  number_shared_notice: "আপনার প্রস্তাবের পক্ষ আপনার ফোন নম্বর নিয়েছেন, শীঘ্রই যোগাযোগ করতে পারেন। আপনিও চাইলে \"নম্বর\" লিখে তাঁর নম্বর নিতে পারেন।",
+  call_followup: "আসসালামু আলাইকুম! প্রস্তাবের পক্ষের সঙ্গে কথা কেমন হলো? জানালে খুশি হব। আরও প্রস্তাব দেখতে চান? \"হ্যাঁ\" বা \"না\" লিখুন।",
   match_closed: "প্রস্তাবটি আর এগোচ্ছে না। মন খারাপ করবেন না, নতুন উপযুক্ত প্রস্তাব পেলে জানাব।",
   photo_request_to_owner: "একটি প্রস্তাবের (বয়স {age}, {district}) পক্ষ থেকে আপনার ছবি দেখতে চাওয়া হয়েছে। ছবি পাঠাতে অনুমতি দেবেন? \"হ্যাঁ\" বা \"না\" লিখুন।",
   photo_request_sent: "অনুমতি চেয়ে অন্য পক্ষকে জানানো হয়েছে। অনুমতি দিলে ছবি পাঠিয়ে দেব।",
   photo_caption: "আপনার অনুরোধ করা প্রস্তাবের ছবি।",
   photo_denied: "অন্য পক্ষ এই মুহূর্তে ছবি দিতে রাজি হননি।",
   photo_none: "অন্য পক্ষের অনুমোদিত কোনো ছবি এখনো নেই।",
-  payment_request:
-    "দুই পক্ষই আগ্রহী! ফোন নম্বর পেতে bKash-এ {amount} টাকা Send Money করুন: {bkash_number}\nএরপর শুধু Transaction ID এখানে লিখুন (চাইলে যে নম্বর থেকে পাঠিয়েছেন তার শেষ ৪ সংখ্যা)। পুরো নম্বর, পিন বা OTP কখনো পাঠাবেন না।\nজেনে রাখুন: এক পক্ষ পেমেন্ট করার পর অন্য পক্ষ নির্ধারিত সময়ে পেমেন্ট না করলে, যিনি পেমেন্ট করেছেন শুধু তাঁকে অন্য পক্ষের নম্বর দেওয়া হবে। আগ্রহ না থাকলে \"আগ্রহী নই\" লিখুন।",
-  payment_received: "ধন্যবাদ! আপনার পেমেন্টের তথ্য পেয়েছি, যাচাই করে জানাচ্ছি।",
   payment_rejected: "দুঃখিত, আপনার পেমেন্ট যাচাই করা যায়নি। কারণ: {reason}। সঠিক তথ্য আবার পাঠান বা \"সাহায্য\" লিখুন।",
-  payment_verified_waiting: "আপনার পেমেন্ট যাচাই হয়েছে। অন্য পক্ষের নম্বর ২৪ ঘণ্টার মধ্যে পাঠানো হবে।",
-  payment_reminder_other: "অন্য পক্ষ পেমেন্ট সম্পন্ন করেছেন। আপনি {amount} টাকা পাঠিয়ে Transaction ID দিন: {bkash_number}",
-  payment_timeout_first: "নির্ধারিত সময়ে পেমেন্ট না আসায় প্রস্তাবটি বন্ধ করা হয়েছে।",
   contact_release: "অভিনন্দন! অন্য পক্ষের ফোন নম্বর: {phone}\nশ্রদ্ধার সঙ্গে যোগাযোগ করুন। শুভ কামনা রইল।",
-  contact_shared_notice: "নির্ধারিত সময় পার হওয়ায় আপনার ফোন নম্বর পেমেন্টকারী পক্ষকে দেওয়া হয়েছে। অন্য পক্ষের নম্বর পেতে পেমেন্ট করে Transaction ID দিন।",
   below_legal_age: "আইন অনুযায়ী বিয়ের বয়স পুরুষের ২১ ও নারীর ১৮ বছর। এই বয়স পূর্ণ হলে আমরা প্রস্তাব পাঠানো শুরু করব।",
   unverified_sender: "দুঃখিত, এই মুহূর্তে আপনার নম্বর যাচাই করা যাচ্ছে না। অনুগ্রহ করে কিছুক্ষণ পরে আবার মেসেজ করুন।",
   report_received: "আপনার অভিযোগ পেয়েছি। প্রস্তাবটি বন্ধ করা হয়েছে এবং আমাদের টিম দেখবে।",
@@ -64,9 +65,9 @@ export const DEFAULT_SYSTEM_PROMPT = `তুমি BS, BiyeShadi.live-এর ব
 2. confidence 0.8 বা বেশি উত্তর আছে এমন প্রশ্ন আবার জিজ্ঞেস করবে না। পরের প্রশ্নের জন্য get_next_question ব্যবহার করো। এক উত্তরে সর্বোচ্চ ২টি প্রশ্ন।
 3. context-এর to_confirm তালিকায় যেসব কম-নিশ্চিত উত্তর আছে সেগুলো একবার যাচাই করে নাও।
 4. "শুধু সরকারি চাকরি", "ঢাকার বাইরে নয়" ধরনের কথা save_preference দিয়ে is_dealbreaker=true করে সংরক্ষণ করো। সাধারণ পছন্দ is_dealbreaker=false।
-5. ম্যাচ তুমি ঠিক করবে না, কোনো প্রস্তাবের প্রতিশ্রুতিও দেবে না; সিস্টেম ঠিক করে। context-এর active_matches-এ your_turn=true হলে কার্ডের তথ্য দেখিয়ে ব্যবহারকারীর মত জেনে respond_to_match করো।
+5. ম্যাচ তুমি ঠিক করবে না, কোনো প্রস্তাবের প্রতিশ্রুতিও দেবে না; সিস্টেম ঠিক করে। Each entry in active_matches has a step. "offered": the user was asked whether they want to see the details; on a yes call respond_to_match with action=see_details (the system sends the details), on a no action=decline. "viewing": they have the details; ask how they find it and whether they have a question for the other side. Liking it → respond_to_match interested; a question for the other side → ask_other_party (never answer for the other side or invent an answer); asking for the phone number → request_number; not interested → decline. pending_questions_for_you are questions the other side asked: pass the user's reply on with answer_question. To see an earlier proposal again → get_past_matches. Wanting more proposals (for example after the call follow-up) → request_more_matches.
 6. ছবি চাইলে request_photo। কারও ছবি চাওয়ার অনুরোধ pending_photo_requests-এ থাকলে স্পষ্ট হ্যাঁ/না শুনে respond_to_photo_request। pending_photo_confirmations থাকলে confirm_profile_photo।
-7. Transaction ID পেলে submit_payment (wallet_last4 দেবে শুধু যদি ব্যবহারকারী শেষ ৪ সংখ্যা জানান)। পুরো wallet নম্বর, পিন, OTP বা কার্ড নম্বর কখনো চাইবে না। পেমেন্ট যাচাই হয়েছে এমন কথা কখনো নিজে থেকে বলবে না; শুধু context-এর payments থেকে জানাবে।
+7. Phone numbers are released only after payment, and only to the person who paid. When request_number says payment is open, the system sends the bKash instructions. When the user says they paid, ask for the bKash Transaction ID; if they do not have it, ask only for the last 4 digits of the number they sent from and when they sent it; then call submit_payment. Never ask for a full wallet number, PIN, OTP or card number. Tell them we will verify the transaction first and then send the number. Never say a payment is verified yourself; only report what context payments says.
 8. অভিযোগ বা হয়রানি হলে report_match। মানুষের সাহায্য চাইলে বা তুমি না পারলে escalate_to_human।
 9. শুরুতে সিস্টেম জিজ্ঞেস করে, তৈরি বায়োডাটা আছে কিনা। "না" বা তৈরি নেই বললে get_next_question দিয়ে প্রশ্ন শুরু করো। আছে বললে সেটির ছবি বা PDF এখানে পাঠাতে বলো (চাইলে লিখেও পাঠাতে পারেন)।
 10. "[বায়োডাটা]" দিয়ে শুরু হওয়া বার্তা ব্যবহারকারীর পাঠানো বায়োডাটার ছবি বা PDF থেকে পড়া লেখা। এখান থেকে questions তালিকার যত উত্তর পাওয়া যায় সব save_answer দিয়ে (source=volunteered) আর পাত্র/পাত্রীর চাহিদা save_preference দিয়ে সংরক্ষণ করো; লেখা অস্পষ্ট হলে confidence 0.8-এর কম দাও। তারপর ছোট করে জানাও কোন তথ্যগুলো পেয়েছ, আর get_next_question দিয়ে বাকি প্রশ্ন করো।
@@ -103,9 +104,13 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   // Bangladesh Child Marriage Restraint Act 2017: men 21, women 18. Applied as a hard matching filter.
   min_match_age: { male: 21, female: 18 },
   match_response_timeout_seconds: 72 * 3600,
-  first_payment_timeout_seconds: 72 * 3600,
-  second_payment_timeout_seconds: 24 * 3600,
-  price_bdt: 300,
+  // Both sides interested but nobody has paid for the number: the match expires after this.
+  payment_timeout_seconds: 7 * 24 * 3600,
+  // After a number is released, BS asks how the call went and whether they want more proposals.
+  call_followup_seconds: 12 * 3600,
+  // Proposals a person has in progress at once. A new one is sent when one closes or they ask for more.
+  max_open_matches: 1,
+  price_bdt: 297,
   bkash_number: "",
   trx_id_pattern: "^[A-Z0-9]{8,12}$",
   rate_limit_per_minute: 12,

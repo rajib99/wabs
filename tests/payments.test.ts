@@ -3,14 +3,14 @@ import { eq } from "drizzle-orm";
 import { buildContext } from "@/lib/conversation/context";
 import { describe, expect, it } from "vitest";
 import { db, schema } from "@/lib/db";
-import { getMatch, respondToMatch } from "@/lib/matches";
-import { handleFirstPaymentTimeout, handleSecondPaymentTimeout, rejectPayment, sendPaymentInstructions, settleVerifiedPayment, submitPayment, verifyPayment } from "@/lib/payments";
+import { getMatch, requestNumber, respondToMatch } from "@/lib/matches";
+import { rejectPayment, sendNumberPaymentInstructions, settleVerifiedPayment, submitPayment, verifyPayment } from "@/lib/payments";
 import { setSetting } from "@/lib/settings";
 import { makeMatch, makeUser, outbound, sentEvents } from "./helpers";
 
 const A = "+8801711000301";
 const B = "+8801711000302";
-const setup = async (state = "payment_pending") => { await makeUser(A, "male"); await makeUser(B, "female"); return makeMatch(A, B, state); };
+const setup = async (state = "both_interested") => { await makeUser(A, "male"); await makeUser(B, "female"); return makeMatch(A, B, state); };
 const allOut = async (p: string) => (await outbound(p)).join("\n");
 const pay = async (matchId: string, phone: string, trx: string) => {
   const r = await submitPayment(phone, matchId, "01712345678", trx);
@@ -25,7 +25,7 @@ describe("submit_payment", () => {
     expect(await submitPayment(A, m.id, undefined, "bad trx!")).toMatchObject({ ok: false });
     expect(await submitPayment(A, m.id, "০১৭১২৩৪৫৬৭৮", "abcd123456")).toMatchObject({ ok: true });
     const [p] = await db().select().from(schema.payments);
-    expect(p).toMatchObject({ senderWalletNumber: "5678", trxId: "ABCD123456", amount: 300, status: "pending" });
+    expect(p).toMatchObject({ senderWalletNumber: "5678", trxId: "ABCD123456", amount: 297, status: "pending" });
     expect(JSON.stringify(p)).not.toContain("01712345678");
   });
   it("a Transaction ID alone is enough", async () => {
@@ -33,12 +33,16 @@ describe("submit_payment", () => {
     expect(await submitPayment(A, m.id, undefined, "ABCD123456")).toMatchObject({ ok: true });
     expect((await db().select().from(schema.payments))[0]!.senderWalletNumber).toBeNull();
   });
-  it("releases the contact number, not the channel identity", async () => {
+  it("without a Transaction ID, needs the last 4 digits and when it was sent", async () => {
     const m = await setup();
-    await db().update(schema.users).set({ contactPhone: "+8801999000111" }).where(eq(schema.users.phone, B));
-    await verifyPayment(await pay(m.id, A, "ABCD123456"), "admin@x");
-    await handleSecondPaymentTimeout(m.id, A);
-    expect(await allOut(A)).toContain("+8801999000111");
+    expect(await submitPayment(A, m.id, "5678", undefined)).toMatchObject({ ok: false });
+    expect(await submitPayment(A, m.id, undefined, undefined, "আজ সকাল ১০টায়")).toMatchObject({ ok: false });
+    const res = await submitPayment(A, m.id, "01712345678", undefined, "আজ সকাল ১০টায় ২৯৭ টাকা");
+    expect(res).toMatchObject({ ok: true });
+    const [p] = await db().select().from(schema.payments);
+    expect(p).toMatchObject({ trxId: null, senderWalletNumber: "5678", claimDetails: "আজ সকাল ১০টায় ২৯৭ টাকা" });
+    // The reply promises a check first, then the number.
+    if (res.ok) expect(res.note).toContain("যাচাই");
   });
   it("rejects reused IDs, across users and matches, and double submission", async () => {
     const m = await setup();
@@ -46,9 +50,13 @@ describe("submit_payment", () => {
     expect(await submitPayment(B, m.id, "01712345678", "ABCD123456")).toMatchObject({ ok: false, error: expect.stringContaining("used") });
     expect(await submitPayment(A, m.id, "01712345678", "ZZZZ999999")).toMatchObject({ ok: false, error: expect.stringContaining("already") });
   });
-  it("refuses strangers and matches not open for payment", async () => {
-    const m = await setup("shown_to_a");
-    expect(await submitPayment(A, m.id, "01712345678", "ABCD123456")).toMatchObject({ ok: false });
+  it("refuses strangers, and payment before the other side has agreed", async () => {
+    for (const state of ["shown_to_a", "a_interested", "offered_to_b", "shown_to_b"]) {
+      const m = await setup(state);
+      expect(await submitPayment(A, m.id, "01712345678", "ABCD123456"), state).toMatchObject({ ok: false });
+      await db().delete(schema.users);
+    }
+    const m = await setup();
     expect(await submitPayment("+8801711000399", m.id, "01712345678", "ABCD123456")).toMatchObject({ ok: false });
   });
   it("allows a new transaction after rejection, but not the rejected ID again", async () => {
@@ -73,89 +81,78 @@ describe("verification", () => {
 });
 
 describe("release rules", () => {
-  it("no number leaves while only one side has been verified", async () => {
+  it("nothing is released for a claim the admin has not approved", async () => {
     const m = await setup();
-    const id = await pay(m.id, A, "ABCD123456");
-    await verifyPayment(id, "admin@x");
+    await pay(m.id, A, "ABCD123456");
     await settleVerifiedPayment(m.id, A);
     expect(await allOut(A)).not.toContain(B);
-    expect(await allOut(B)).not.toContain(A);
-    expect((await getMatch(m.id))!.state).toBe("payment_pending");
+    expect((await getMatch(m.id))!.state).toBe("both_interested");
   });
-  it("two-sided: both numbers go to both, once, even if settled repeatedly", async () => {
+  it("approval sends the payer the other's contact number, once, and tells the other side", async () => {
     const m = await setup();
+    await db().update(schema.users).set({ contactPhone: "+8801999000111" }).where(eq(schema.users.phone, B));
     await verifyPayment(await pay(m.id, A, "ABCD123456"), "admin@x");
-    await verifyPayment(await pay(m.id, B, "EFGH123456"), "admin@x");
     await settleVerifiedPayment(m.id, A);
-    await settleVerifiedPayment(m.id, B);
-    await settleVerifiedPayment(m.id, B);
+    await settleVerifiedPayment(m.id, A);
+    expect((await outbound(A)).filter((t) => t.includes("+8801999000111"))).toHaveLength(1);
+    expect(await allOut(B)).not.toContain(A); // only the payer's direction
+    expect(await allOut(B)).toContain("আপনার ফোন নম্বর নিয়েছেন");
     expect((await getMatch(m.id))!.state).toBe("contact_released");
-    expect((await outbound(A)).filter((t) => t.includes(B))).toHaveLength(1);
-    expect((await outbound(B)).filter((t) => t.includes(A))).toHaveLength(1);
+    expect(sentEvents().filter((e) => e.name === "contact/released")).toHaveLength(2); // deduped by id in Inngest
+    expect(sentEvents().find((e) => e.name === "contact/released")!.id).toBe(`released-${m.id}-${A}`);
+    // The payer gets no new proposals until they ask for more.
+    const [payer] = await db().select().from(schema.users).where(eq(schema.users.phone, A));
+    expect(payer!.matchingPaused).toBe(true);
   });
-  it("one-sided timeout: payer gets the number, the non-payer does not, and is told", async () => {
+  it("after one side got the number, the other side can still pay for theirs", async () => {
     const m = await setup();
     await verifyPayment(await pay(m.id, A, "ABCD123456"), "admin@x");
-    expect(await handleSecondPaymentTimeout(m.id, A)).toBe("one_sided");
-    expect(await allOut(A)).toContain(B);
-    expect(await allOut(B)).not.toContain(A);
-    expect(await allOut(B)).toContain("আপনার ফোন নম্বর পেমেন্টকারী");
-    expect((await getMatch(m.id))!).toMatchObject({ state: "contact_released", closeReason: "one_sided_timeout" });
-  });
-  it("a late second payer still receives the first payer's number", async () => {
-    const m = await setup();
-    await verifyPayment(await pay(m.id, A, "ABCD123456"), "admin@x");
-    await handleSecondPaymentTimeout(m.id, A);
-    await verifyPayment(await pay(m.id, B, "EFGH123456"), "admin@x");
-    await settleVerifiedPayment(m.id, B);
-    expect(await allOut(B)).toContain(A);
-  });
-  it("after a one-sided release the non-payer can still pay, and the payer has nothing left to pay", async () => {
-    const m = await setup();
-    await verifyPayment(await pay(m.id, A, "ABCD123456"), "admin@x");
-    await handleSecondPaymentTimeout(m.id, A);
+    await settleVerifiedPayment(m.id, A);
     const open = async (phone: string) => (await buildContext(phone, randomUUID(), "x")).context.active_matches[0]?.payment_open;
     expect(await open(B)).toBe(true);
     expect(await open(A)).toBe(false);
-  });
-  it("timeout firing after both paid releases both instead of one-sided", async () => {
-    const m = await setup();
-    await verifyPayment(await pay(m.id, A, "ABCD123456"), "admin@x");
     await verifyPayment(await pay(m.id, B, "EFGH123456"), "admin@x");
-    expect(await handleSecondPaymentTimeout(m.id, A)).toBe("both");
-    expect(await allOut(A)).toContain(B);
+    await settleVerifiedPayment(m.id, B);
     expect(await allOut(B)).toContain(A);
   });
-  it("an explicit decline stops the release and raises a refund escalation", async () => {
-    const m = await setup();
-    await verifyPayment(await pay(m.id, A, "ABCD123456"), "admin@x");
-    await respondToMatch(B, m.id, "decline");
-    expect(await handleSecondPaymentTimeout(m.id, A)).toBe("noop");
-    expect(await allOut(A)).not.toContain(B);
-    const [e] = await db().select().from(schema.escalations).where(eq(schema.escalations.kind, "refund"));
-    expect(e!.phone).toBe(A);
-  });
-  it("verification after the match closed asks a human rather than releasing", async () => {
+  it("a decline with a claim in hand raises a refund escalation and releases nothing", async () => {
     const m = await setup();
     const id = await pay(m.id, A, "ABCD123456");
     await respondToMatch(B, m.id, "decline");
     await verifyPayment(id, "admin@x");
     await settleVerifiedPayment(m.id, A);
     expect(await allOut(A)).not.toContain(B);
-    expect(await db().select().from(schema.escalations)).toHaveLength(1);
-  });
-  it("first-payment timeout expires the match, unless someone did pay", async () => {
-    const m = await setup();
-    expect(await handleFirstPaymentTimeout(m.id)).toBe(true);
-    expect((await getMatch(m.id))!.state).toBe("expired");
+    const refunds = await db().select().from(schema.escalations).where(eq(schema.escalations.kind, "refund"));
+    expect(refunds.length).toBeGreaterThanOrEqual(1);
+    expect(refunds.every((e) => e.phone === A)).toBe(true);
   });
   it("instructions use amount and number from settings, and refuse an empty number", async () => {
     const m = await setup();
     await setSetting("price_bdt", 450);
-    await sendPaymentInstructions(m);
+    await sendNumberPaymentInstructions(m.id, A);
     expect(await allOut(A)).toContain("450");
     expect(await allOut(A)).toContain("01700000000");
     await setSetting("bkash_number", "");
-    await expect(sendPaymentInstructions(m)).rejects.toThrow(/bkash_number/);
+    await expect(sendNumberPaymentInstructions(m.id, B)).rejects.toThrow(/bkash_number/);
+  });
+});
+
+describe("asking for the number", () => {
+  it("before the other side has agreed, a's request asks b first and no payment details go out", async () => {
+    const m = await setup("shown_to_a");
+    expect(await requestNumber(A, m.id)).toMatchObject({ ok: true, state: "a_interested" });
+    expect(await allOut(A)).not.toContain("01700000000");
+    expect((await getMatch(m.id))!.numberRequestedBy).toEqual([A]);
+  });
+  it("once both are interested, the payment details go to whoever asked", async () => {
+    const m = await setup("both_interested");
+    await requestNumber(A, m.id);
+    await requestNumber(A, m.id);
+    expect((await outbound(A)).filter((t) => t.includes("01700000000"))).toHaveLength(1);
+    expect(await allOut(B)).not.toContain("01700000000");
+  });
+  it("cannot be asked before the details were opened", async () => {
+    const m = await setup("offered_to_a");
+    expect(await requestNumber(A, m.id)).toMatchObject({ ok: false });
   });
 });

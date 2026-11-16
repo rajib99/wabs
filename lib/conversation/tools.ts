@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolDefinition } from "@/lib/ai";
-import { respondToMatch } from "@/lib/matches";
+import { answerQuestion, askOtherParty, pastMatches, requestMoreMatches, requestNumber, respondToMatch } from "@/lib/matches";
 import { submitPayment } from "@/lib/payments";
 import { confirmProfilePhoto, requestPhoto, respondToPhotoRequest } from "@/lib/photos";
 import { pendingQuestions, loadAnswers, loadQuestions, saveAnswer, savePreference } from "@/lib/profile";
@@ -35,8 +35,28 @@ export const TOOL_SCHEMAS = {
     schema: z.object({}),
   },
   respond_to_match: {
-    description: "Record the user's decision on a match from active_matches.",
-    schema: z.object({ match_id: z.string().uuid(), action: z.enum(["interested", "decline"]) }),
+    description: "Record the user's decision on a match from active_matches. see_details: they want to see the details of an offered match (the system sends them). interested: they like a match they have seen. decline: not interested.",
+    schema: z.object({ match_id: z.string().uuid(), action: z.enum(["see_details", "interested", "decline"]) }),
+  },
+  ask_other_party: {
+    description: "The user has a question for the other side of a match they have seen. BS passes it on and later relays the answer. Write the question in Bengali as the user meant it.",
+    schema: z.object({ match_id: z.string().uuid(), question: z.string().min(1).max(300) }),
+  },
+  answer_question: {
+    description: "The user answered a question in pending_questions_for_you. Pass their answer on, in their words.",
+    schema: z.object({ question_id: z.string().uuid(), answer: z.string().min(1).max(500) }),
+  },
+  request_number: {
+    description: "The user wants the other side's phone number for a match. The system checks the other side agreed and sends the payment details.",
+    schema: z.object({ match_id: z.string().uuid() }),
+  },
+  get_past_matches: {
+    description: "List every proposal sent to this user, numbered from the first, with details for those they opened. Use when they want to see an earlier proposal again or ask how many they got.",
+    schema: z.object({}),
+  },
+  request_more_matches: {
+    description: "The user wants more proposals (for example after the call follow-up, or after an earlier one did not work out).",
+    schema: z.object({}),
   },
   request_photo: {
     description: "The user wants to see the photo of the other party in a match. Asks that party's permission.",
@@ -51,8 +71,10 @@ export const TOOL_SCHEMAS = {
     schema: z.object({ is_profile_photo: z.boolean() }),
   },
   submit_payment: {
-    description: "Record a bKash Transaction ID the user gave for a match with payment_open=true. wallet_last4 only if the user offered the last 4 digits of the sending number; never ask for a full account number.",
-    schema: z.object({ match_id: z.string().uuid(), trx_id: z.string().min(1), wallet_last4: z.string().optional() }),
+    description: "Record a bKash payment claim for a match with payment_open=true: the Transaction ID, or if they have none, wallet_last4 (the last 4 digits of the sending number) plus paid_details (when they sent it, how much). Never ask for a full account number.",
+    schema: z.object({
+      match_id: z.string().uuid(), trx_id: z.string().optional(), wallet_last4: z.string().optional(), paid_details: z.string().max(300).optional(),
+    }),
   },
   report_match: {
     description: "The user reports or blocks the other party of a match. Closes the match.",
@@ -116,6 +138,20 @@ export async function executeTool(name: ToolName, args: unknown, turn: TurnState
       const a = TOOL_SCHEMAS.respond_to_match.schema.parse(args);
       return respondToMatch(phone, a.match_id, a.action);
     }
+    case "ask_other_party": {
+      const a = TOOL_SCHEMAS.ask_other_party.schema.parse(args);
+      return askOtherParty(phone, a.match_id, a.question);
+    }
+    case "answer_question": {
+      const a = TOOL_SCHEMAS.answer_question.schema.parse(args);
+      return answerQuestion(phone, a.question_id, a.answer);
+    }
+    case "request_number":
+      return requestNumber(phone, TOOL_SCHEMAS.request_number.schema.parse(args).match_id);
+    case "get_past_matches":
+      return pastMatches(phone);
+    case "request_more_matches":
+      return requestMoreMatches(phone);
     case "request_photo":
       return requestPhoto(phone, TOOL_SCHEMAS.request_photo.schema.parse(args).match_id);
     case "respond_to_photo_request": {
@@ -126,7 +162,7 @@ export async function executeTool(name: ToolName, args: unknown, turn: TurnState
       return confirmProfilePhoto(phone, TOOL_SCHEMAS.confirm_profile_photo.schema.parse(args).is_profile_photo);
     case "submit_payment": {
       const a = TOOL_SCHEMAS.submit_payment.schema.parse(args);
-      return submitPayment(phone, a.match_id, a.wallet_last4, a.trx_id);
+      return submitPayment(phone, a.match_id, a.wallet_last4, a.trx_id, a.paid_details);
     }
     case "report_match": {
       const a = TOOL_SCHEMAS.report_match.schema.parse(args);

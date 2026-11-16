@@ -8,6 +8,7 @@ import { Badge, Card, PageTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { requireRole } from "@/lib/admin-auth";
 import { db, schema } from "@/lib/db";
+import { isVisibleTo } from "@/lib/matches";
 import { getStorage } from "@/lib/storage";
 import { endTakeoverAction, eraseUserAction, setBlockedAction, setContactVerifiedAction } from "../../actions";
 
@@ -93,7 +94,10 @@ export default async function UserPage({ params }: { params: Promise<{ phone: st
               </div>
             ))}
           </div>
-          <h2 className="mb-2 mt-4 font-medium">ম্যাচ</h2>
+          <h2 className="mb-2 mt-4 font-medium">
+            ম্যাচ · পাঠানো হয়েছে {matches.filter((m) => isVisibleTo(m, phone)).length}টি
+            {user.matchingPaused && <Badge className="ml-2">নতুন প্রস্তাব বন্ধ (কথা চলছে)</Badge>}
+          </h2>
           <ul className="text-sm">
             {matches.map((m) => <li key={m.id}><Link className="underline" href={`/admin/matches?id=${m.id}`}>{m.state} · {m.score}%</Link></li>)}
             {matches.length === 0 && <li className="text-muted-foreground">কোনো ম্যাচ নেই।</li>}

@@ -79,6 +79,7 @@ describe("findMatches", () => {
 
   it("enforces the daily introduction limit for both users", async () => {
     await setSetting("daily_intro_limit", 2);
+    await setSetting("max_open_matches", 10);
     await makeUser(M, "male");
     for (let i = 0; i < 4; i++) await makeUser(`+880171100002${i}`, "female");
     expect(await findMatches(M)).toHaveLength(2);
@@ -98,6 +99,21 @@ describe("findMatches", () => {
 
   it("does nothing for blocked or incomplete seekers", async () => {
     await makeUser(M, "male", {}, { blocked: true }); await makeUser(F, "female");
+    expect(await findMatches(M)).toHaveLength(0);
+  });
+});
+
+describe("one proposal at a time", () => {
+  it("sends the next proposal only after the open one closes, and none while paused", async () => {
+    await makeUser(M, "male");
+    for (let i = 0; i < 3; i++) await makeUser(`+880171100004${i}`, "female");
+    const [first] = await findMatches(M);
+    expect(first).toBeTruthy();
+    expect(await findMatches(M)).toHaveLength(0); // one is in progress
+    await db().update(schema.matches).set({ state: "declined" }).where(eq(schema.matches.id, first!.id));
+    expect(await findMatches(M)).toHaveLength(1);
+    await db().update(schema.matches).set({ state: "contact_released" });
+    await db().update(schema.users).set({ matchingPaused: true }).where(eq(schema.users.phone, M));
     expect(await findMatches(M)).toHaveLength(0);
   });
 });

@@ -2,8 +2,9 @@ import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { getEmbedder } from "@/lib/ai";
 import { db, schema } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { matchCardText, otherParty, visibleMatches, cardFields } from "@/lib/matches";
-import { paymentInfo, pendingPaymentsForUser } from "@/lib/payments";
+import { cardFields, matchCardText, matchesSentCount, otherParty, questionsFor, stepFor, visibleMatches } from "@/lib/matches";
+import { PAYABLE_STATES, paymentInfo, pendingPaymentsForUser } from "@/lib/payments";
+import { toBengaliDigits } from "@/lib/text";
 import { CONFIDENT, isSettled, loadAnswers, loadQuestions } from "@/lib/profile";
 import { type ContactStep, pendingContactStep } from "./contact";
 
@@ -20,7 +21,11 @@ export type AgentContext = {
   preferences: { field: string; operator: string; value: unknown; is_dealbreaker: boolean }[];
   questions: { key: string; text: string; type: string; options: unknown; answered: boolean }[];
   to_confirm: { question_key: string; value: unknown }[];
-  active_matches: { match_id: string; state: string; your_turn: boolean; payment_open: boolean; card: string }[];
+  /** step: offered (asked whether to see details; card is null until then), viewing, waiting_for_other_side, both_interested, number_shared. */
+  active_matches: { match_id: string; step: string; match_percent: string; payment_open: boolean; number_requested: boolean; card: string | null }[];
+  pending_questions_for_you: { question_id: string; match_id: string; question: string }[];
+  /** How many proposals this user has been sent in all; get_past_matches lists them. */
+  matches_sent: number;
   pending_photo_requests: { request_id: string; from_age: string; from_district: string }[];
   pending_photo_confirmations: number;
   payments: { match_id: string; status: string; amount: number; note: string | null }[];
@@ -77,6 +82,7 @@ export async function buildContext(phone: string, messageId: string, text: strin
     d.select().from(preferences).where(eq(preferences.phone, phone)),
     visibleMatches(phone), pendingPaymentsForUser(phone),
   ]);
+  const [questionsForMe, sentCount] = await Promise.all([questionsFor(phone), matchesSentCount(phone)]);
   const [user] = await d.select().from(schema.users).where(eq(schema.users.phone, phone));
   const byKey = new Map(answers.map((a) => [a.questionKey, a]));
 
@@ -84,13 +90,16 @@ export async function buildContext(phone: string, messageId: string, text: strin
   const [unconfirmed] = await d.select({ n: sql<number>`count(*)::int` }).from(photos).where(and(eq(photos.phone, phone), isNull(photos.ownerConfirmedAt)));
 
   const activeMatches = await Promise.all(matches.map(async (m) => {
-    const isA = m.userA === phone;
+    const step = stepFor(m, phone);
     return {
       match_id: m.id,
-      state: m.state,
-      your_turn: (isA && m.state === "shown_to_a") || (!isA && m.state === "shown_to_b"),
-      payment_open: m.state === "payment_pending" || (m.state === "contact_released" && !payments.some((p) => p.matchId === m.id && p.status !== "rejected")),
-      card: await matchCardText(otherParty(m, phone), m.score),
+      step,
+      match_percent: toBengaliDigits(Math.round(m.score)),
+      // Open to this person until they have a payment that is pending or verified.
+      payment_open: PAYABLE_STATES.includes(m.state) && !payments.some((p) => p.matchId === m.id && p.status !== "rejected"),
+      number_requested: m.numberRequestedBy.includes(phone),
+      // No details before they say they want to see them.
+      card: step === "offered" ? null : await matchCardText(otherParty(m, phone), m.score),
     };
   }));
 
@@ -102,6 +111,8 @@ export async function buildContext(phone: string, messageId: string, text: strin
     questions: questions.map((q) => ({ key: q.key, text: q.bengaliText, type: q.fieldType, options: q.options, answered: isSettled(byKey.get(q.key)) })),
     to_confirm: answers.filter((a) => a.confidence < CONFIDENT && !a.confirmAskedAt).map((a) => ({ question_key: a.questionKey, value: a.value })),
     active_matches: activeMatches,
+    pending_questions_for_you: questionsForMe.map((q) => ({ question_id: q.id, match_id: q.matchId, question: q.question })),
+    matches_sent: sentCount,
     pending_photo_requests: await Promise.all(requests.map(async (r) => {
       const f = await cardFields(r.requester);
       return { request_id: r.id, from_age: f.age, from_district: f.district };

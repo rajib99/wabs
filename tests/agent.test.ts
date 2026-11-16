@@ -141,7 +141,7 @@ describe("prompt injection and data isolation", () => {
 
   it("phone numbers in LLM output are redacted, except the bKash number and the user's own", async () => {
     await makeUser(P, "male"); await makeUser(OTHER, "female");
-    await makeMatch(P, OTHER, "payment_pending");
+    await makeMatch(P, OTHER, "both_interested");
     const res = await say(new Scripted([{ content: "ওনার নম্বর 01711000402, ০১৮১২৩৪৫৬৭৮। bKash 01700000000। আপনার 01711000401" }]), "নম্বর দিন");
     expect(res.reply).not.toContain("01711000402");
     expect(res.reply).not.toContain("০১৮১২৩৪৫৬৭৮");
