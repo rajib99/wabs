@@ -1,3 +1,4 @@
+import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
 import { runAgentTurn } from "@/lib/conversation/agent";
 import { askForNotifications } from "@/lib/conversation/notify";
@@ -15,6 +16,7 @@ import {
 import { audit } from "@/lib/audit";
 import { getSetting, msg } from "@/lib/settings";
 import { eq } from "drizzle-orm";
+import { isConfigError } from "@/lib/env";
 
 /** Every inbound message, per-user in order. Step outputs carry ids and flags, never message text. */
 export const waMessageReceived = inngest.createFunction(
@@ -42,7 +44,10 @@ export const waMessageReceived = inngest.createFunction(
       // A ready-made biodata (image or PDF) is read and handed to the agent; a picture of a person is a profile photo.
       let kind: Awaited<ReturnType<typeof readDocument>>;
       try {
-        kind = await step.run("read-document", () => readDocument(messageId));
+        // A missing reader key will not fix itself: fail the step at once so the fallback below runs without minutes of retries.
+        kind = await step.run("read-document", () => readDocument(messageId).catch((err) => {
+          throw isConfigError(err) ? new NonRetriableError(err.message, { cause: err }) : err;
+        }));
       } catch {
         kind = action === "image" ? "photo" : "unreadable"; // the reader is down: keep the old photo behaviour
       }

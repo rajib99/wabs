@@ -1,11 +1,18 @@
 import { z } from "zod";
 
+/** A feature's settings are missing or invalid. Retrying cannot fix it, so background steps should not retry it. */
+export class ConfigError extends Error {
+  override name = "ConfigError";
+}
+/** By name, so it still matches when the error comes from another copy of this module (dev reloads, bundling). */
+export const isConfigError = (err: unknown) => err instanceof Error && err.name === "ConfigError";
+
 /** Secrets are validated lazily, the first time the feature that needs them is used. */
 function parse<T extends z.ZodTypeAny>(feature: string, schema: T): z.infer<T> {
   const result = schema.safeParse(process.env);
   if (!result.success) {
     const missing = result.error.issues.map((i) => i.path.join(".")).join(", ");
-    throw new Error(`${feature} is not configured: check ${missing}`);
+    throw new ConfigError(`${feature} is not configured: check ${missing}`);
   }
   return result.data;
 }
@@ -30,7 +37,7 @@ export const env = {
       }),
     );
     const apiKey = cfg.VISION_API_KEY || cfg.GROQ_API_KEY;
-    if (!apiKey) throw new Error("Vision is not configured: check VISION_API_KEY (or GROQ_API_KEY)");
+    if (!apiKey) throw new ConfigError("Vision is not configured: check VISION_API_KEY (or GROQ_API_KEY)");
     return { apiKey, baseURL: cfg.VISION_BASE_URL, model: cfg.VISION_MODEL };
   },
   embedder: () => parse("Embedder", z.object({ EMBEDDER: z.enum(["mock", "e5"]).default("e5") })).EMBEDDER,
