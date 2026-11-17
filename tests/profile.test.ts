@@ -24,6 +24,30 @@ describe("validation", () => {
   });
 });
 
+describe("skin colour and looks rating", () => {
+  it("both are asked of bride and groom, after height", async () => {
+    const qs = await loadQuestions();
+    const at = (k: string) => qs.findIndex((q) => q.key === k);
+    for (const k of ["skin_color", "beauty_rating"]) {
+      const q = qs.find((x) => x.key === k)!;
+      expect(q).toMatchObject({ required: true, active: true, askCondition: null });
+      expect(at(k)).toBeGreaterThan(at("height_cm"));
+      expect(at(k)).toBeLessThan(at("family_details"));
+    }
+  });
+  it("skin colour takes an option or its label; the rating must be 1 to 10", async () => {
+    const qs = await loadQuestions();
+    const skin = qs.find((q) => q.key === "skin_color")!;
+    const beauty = qs.find((q) => q.key === "beauty_rating")!;
+    expect(validateAnswer(skin, "উজ্জ্বল শ্যামলা")).toEqual({ ok: true, value: "bright_wheatish" });
+    expect(validateAnswer(skin, "fair")).toEqual({ ok: true, value: "fair" });
+    expect(validateAnswer(skin, "নীল").ok).toBe(false);
+    expect(validateAnswer(beauty, "৮")).toEqual({ ok: true, value: 8 });
+    expect(validateAnswer(beauty, 10)).toEqual({ ok: true, value: 10 });
+    for (const bad of [0, 11, "অনেক"]) expect(validateAnswer(beauty, bad).ok, String(bad)).toBe(false);
+  });
+});
+
 describe("ask conditions", () => {
   it("evaluates rule shapes", () => {
     expect(conditionMet(null, {})).toBe(true);
@@ -70,7 +94,7 @@ describe("question engine", () => {
     const values: Record<string, unknown> = {
       name: "ক", age: 25, gender: "male", created_by_relation: "self", religion: "muslim", marital_status: "never_married", district: "ঢাকা", current_location: "ঢাকা",
       education: "bachelor", profession: "শিক্ষক", job_type: "govt", job_details: "Assistant officer at the district office", family_details: "ভালো", preferred_age_range: [20, 25], preferred_education: ["any"], preferred_job_type: ["any"], preferred_location: ["any"],
-      preferred_looks: "beautiful", partner_expectation: "Kind and honest",
+      skin_color: "fair", beauty_rating: 6, preferred_looks: "beautiful", partner_expectation: "Kind and honest",
     };
     const completions = [];
     // business_details is asked only of men in business; this one has a government job.

@@ -76,7 +76,7 @@ const answerFor = (p: Person, key: string): string => p.dealbreakers?.[key] ?? (
   name: "সিমুলেশন", age: p.age, gender: p.gender, created_by_relation: "নিজের", religion: "মুসলিম", marital_status: "অবিবাহিত", district: p.district,
   current_location: p.district, education: "স্নাতক", profession: "প্রকৌশলী", job_type: "বেসরকারি", income_range: "২০-৪০ হাজার", height_cm: "৫ ফুট ৫ ইঞ্চি",
   family_details: "বাবা-মা ও এক বোন", preferred_age_range: "২১ থেকে ৪৫", preferred_education: "যেকোনো", preferred_job_type: "যেকোনো",
-  preferred_location: `শুধু ${p.district} চাই`, preferred_looks: "ব্যাপার না", partner_expectation: "ভদ্র ও পরিবারকেন্দ্রিক মানুষ",
+  preferred_location: `শুধু ${p.district} চাই`, preferred_looks: "ব্যাপার না", skin_color: "শ্যামলা", beauty_rating: "৭", partner_expectation: "ভদ্র ও পরিবারকেন্দ্রিক মানুষ",
   job_details: "বেসরকারি ব্যাংকে সফটওয়্যার প্রকৌশলী, অফিস মতিঝিলে, সফটওয়্যার তৈরি করি",
 } as Record<string, string>)[key] ?? "জানি না";
 

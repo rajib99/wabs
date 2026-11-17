@@ -15,7 +15,7 @@ const BASE: Record<string, unknown> = {
   name: "টেস্ট", created_by_relation: "self", religion: "muslim", marital_status: "never_married", district: "dhaka", current_location: "ঢাকা",
   education: "bachelor", profession: "প্রকৌশলী", job_type: "private", job_details: "Software engineer at a private bank, office in Motijheel", family_details: "ছোট পরিবার",
   preferred_age_range: { min: 18, max: 45 }, preferred_education: ["any"], preferred_job_type: ["any"], preferred_location: ["any"],
-  preferred_looks: "any", partner_expectation: "Kind and family minded",
+  skin_color: "wheatish", beauty_rating: 7, preferred_looks: "any", partner_expectation: "Kind and family minded",
 };
 
 /** Creates an active user with a complete profile. */

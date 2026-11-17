@@ -20,6 +20,9 @@ export const QUESTION_SEED = [
   { key: "job_details", bengaliText: "চাকরির বিস্তারিত বলুন: কোন প্রতিষ্ঠানে, কী পদে, অফিস কোথায়, আর আসলে কী কাজ করেন?", fieldType: "text", askCondition: {all: [{field: "gender", op: "eq", value: "male"}, {field: "job_type", op: "in", value: ["govt", "semi_govt", "private"]}]} },
   { key: "income_range", bengaliText: "মাসিক আয় আনুমানিক কত? (২০ হাজারের কম, ২০-৪০ হাজার, ৪০-৮০ হাজার, ৮০ হাজারের বেশি, আয় নেই)", fieldType: "select", required: false, options: [opt("none", "আয় নেই"), opt("below_20k", "২০ হাজারের কম"), opt("20k_40k", "২০-৪০ হাজার"), opt("40k_80k", "৪০-৮০ হাজার"), opt("above_80k", "৮০ হাজারের বেশি")] },
   { key: "height_cm", bengaliText: "উচ্চতা কত? (যেমন ৫ ফুট ৬ ইঞ্চি)", fieldType: "number", required: false, options: { min: 120, max: 220, unit: "cm" } },
+  // Asked of both bride and groom. Stored for the agent and admins; not used in scoring.
+  { key: "skin_color", bengaliText: "পাত্র/পাত্রীর গায়ের রং কেমন: উজ্জ্বল ফর্সা, ফর্সা, উজ্জ্বল শ্যামলা, শ্যামলা, নাকি কালো?", fieldType: "select", options: [opt("very_fair", "উজ্জ্বল ফর্সা"), opt("fair", "ফর্সা"), opt("bright_wheatish", "উজ্জ্বল শ্যামলা"), opt("wheatish", "শ্যামলা"), opt("dark", "কালো")] },
+  { key: "beauty_rating", bengaliText: "দেখতে কেমন, ১ থেকে ১০-এর মধ্যে নিজে একটি নম্বর দিন (১০ = খুব সুন্দর)।", fieldType: "number", options: { min: 1, max: 10 } },
   { key: "family_details", bengaliText: "পরিবার সম্পর্কে একটু বলুন (বাবা-মা, ভাই-বোন, পারিবারিক অবস্থা)।", fieldType: "text" },
   { key: "preferred_age_range", bengaliText: "কেমন বয়সের পাত্র/পাত্রী চান? (যেমন ২৫ থেকে ৩০)", fieldType: "range" },
   { key: "preferred_education", bengaliText: "পাত্র/পাত্রীর শিক্ষাগত যোগ্যতা কেমন হলে ভালো হয়?", fieldType: "multiselect", options: [...EDU, ANY] },
