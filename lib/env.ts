@@ -11,7 +11,8 @@ export const isConfigError = (err: unknown) => err instanceof Error && err.name 
 function parse<T extends z.ZodTypeAny>(feature: string, schema: T): z.infer<T> {
   const result = schema.safeParse(process.env);
   if (!result.success) {
-    const missing = result.error.issues.map((i) => i.path.join(".")).join(", ");
+    // Field names, plus the reason when it is more than "missing" (never the value itself: it may be a secret).
+    const missing = result.error.issues.map((i) => (i.code === "invalid_format" ? `${i.path.join(".")} (${i.message})` : i.path.join("."))).join(", ");
     throw new ConfigError(`${feature} is not configured: check ${missing}`);
   }
   return result.data;
@@ -101,7 +102,9 @@ export const env = {
     parse(
       "R2",
       z.object({
-        R2_ACCOUNT_ID: secret,
+        // The 32-character hex Account ID from the Cloudflare dashboard, nothing else. A full endpoint URL or a token
+        // ID here makes an R2 host that does not exist, which Cloudflare answers with a TLS handshake failure.
+        R2_ACCOUNT_ID: z.string().trim().regex(/^[0-9a-f]{32}$/, "R2_ACCOUNT_ID must be the 32-character hex Account ID, not a URL or token ID"),
         R2_ACCESS_KEY_ID: secret,
         R2_SECRET_ACCESS_KEY: secret,
         R2_BUCKET: secret,

@@ -3,6 +3,8 @@
  * app (CHANNEL=mock) + Inngest dev server must be up. Exits non-zero on any failed check.
  */
 import "dotenv/config";
+import sharp from "sharp";
+import { getStorage } from "@/lib/storage";
 import { readFileSync } from "node:fs";
 import { and, eq, like, or } from "drizzle-orm";
 import { closeDb, db, schema } from "@/lib/db";
@@ -217,15 +219,16 @@ async function main() {
     const m1 = await openOffer(c1m!.phone, c1f!.phone);
     const viewer = m1.userA;
     const owner = m1.userB;
-    const before = await sendFile(owner, "image", Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]), "image/jpeg");
+    // A real 3000x2000 photo, so the stored copy goes through resizing and re-encoding.
+    const shot = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: { r: 180, g: 120, b: 90 } } }).jpeg({ quality: 100 }).toBuffer();
+    const before = await sendFile(owner, "image", shot, "image/jpeg");
     check("image: asks whether it is the profile photo", before.includes("প্রোফাইল ছবি"), before);
     await say(owner, "হ্যাঁ");
     const [photo] = await d.select().from(schema.photos).where(eq(schema.photos.phone, owner));
-    check("image: pending admin approval after owner confirms", !!photo?.ownerConfirmedAt && photo.approvedByAdmin === null, photo);
-    const none = await say(viewer, "ছবি দেখতে চাই");
-    check("unapproved photo is not offered", none.includes("কোনো ছবি") && (await history(viewer)).every((x) => x.type !== "image"), none);
-    await d.update(schema.photos).set({ approvedByAdmin: true }).where(eq(schema.photos.id, photo!.id));
-    await d.delete(schema.photoRequests).where(eq(schema.photoRequests.matchId, m1.id));
+    const stored = await getStorage().get(photo!.r2Key);
+    const dims = await sharp(stored.bytes).metadata();
+    check("image: stored as a JPEG under 2 MB, at most 2048px", stored.bytes.byteLength <= 2 * 1024 * 1024 && Math.max(dims.width!, dims.height!) <= 2048, dims);
+    check("image: shareable once the owner confirms, no admin step", !!photo?.ownerConfirmedAt && photo.approvedByAdmin === null, photo);
     await say(viewer, "ছবি দেখতে চাই");
     await waitText(owner, "দেখতে চাওয়া হয়েছে");
     check("no photo before owner says yes", (await history(viewer)).every((x) => x.type !== "image"));

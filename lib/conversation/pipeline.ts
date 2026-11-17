@@ -8,6 +8,7 @@ import { logger } from "@/lib/logger";
 import { endUnderage, eraseUser, isRateLimited, isStopCommand, parseAgeGate, parseYesNo, scrubMessages, sendStopConfirmation } from "@/lib/safety";
 import { getSetting, msg } from "@/lib/settings";
 import { isExplicitYes } from "@/lib/photos";
+import { optimizeImage } from "@/lib/image";
 import { getStorage } from "@/lib/storage";
 import { normalizeWalletNumber, toAsciiDigits } from "@/lib/text";
 import { completionNotes, contactQuestion, pendingContactStep } from "./contact";
@@ -146,7 +147,10 @@ export async function storeMedia(messageId: string, folder: "voice" | "photos" |
   if (m.mediaKey) return true;
   let stage = "download";
   try {
-    const file = await getChannel().downloadMedia(m.mediaId, await getSetting<number>("max_media_bytes"));
+    const downloaded = await getChannel().downloadMedia(m.mediaId, await getSetting<number>("max_media_bytes"));
+    stage = "optimize";
+    // Photos are shrunk to the size limit and stripped of metadata (GPS) before anything keeps or sends them.
+    const file = folder === "photos" ? await optimizeImage(downloaded, await getSetting<number>("max_photo_bytes")) : downloaded;
     stage = "store";
     const key = `${folder}/${m.phone.replace(/\D/g, "")}/${m.id}.${extFor(file.mime)}`;
     await getStorage().put(key, file.bytes, file.mime);
@@ -193,7 +197,7 @@ export async function handleImage(messageId: string) {
   const d = db();
   const [m] = await d.select().from(messages).where(eq(messages.id, messageId));
   if (!m?.mediaKey) return;
-  // At the photo step we have just asked for their photos, so a picture sent now is one; it still goes to admin review.
+  // At the photo step we have just asked for their photos, so a picture sent now is one, and shareable at once.
   const [user] = await d.select().from(users).where(eq(users.phone, m.phone));
   const atPhotoStep = pendingContactStep(user) === "photo";
   const [existing] = await d.select().from(schema.photos).where(and(eq(schema.photos.messageId, messageId)));

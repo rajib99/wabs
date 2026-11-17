@@ -128,7 +128,7 @@ export const photos = pgTable("photos", {
   r2Key: text("r2_key").notNull(),
   messageId: uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
   ownerConfirmedAt: ts("owner_confirmed_at"),
-  approvedByAdmin: boolean("approved_by_admin"), // null = pending
+  approvedByAdmin: boolean("approved_by_admin"), // null = not reviewed (shareable), false = removed by an admin
   reviewedBy: text("reviewed_by"),
   reviewedAt: ts("reviewed_at"),
   createdAt: createdAt(),

@@ -223,13 +223,22 @@ describe("photo consent", () => {
     const images = await db().select().from(schema.messages).where(eq(schema.messages.type, "image"));
     expect(images.map((i) => i.phone)).toEqual([A]);
   });
-  it("advance consent never releases a photo the admin has not approved", async () => {
+  it("advance consent never releases a photo an admin removed", async () => {
     await makeUser(A, "male"); await makeUser(B, "female", {}, { photoShareConsent: true });
-    await db().insert(schema.photos).values({ phone: B, r2Key: "t/y.jpg", ownerConfirmedAt: new Date(), approvedByAdmin: null });
+    await db().insert(schema.photos).values({ phone: B, r2Key: "t/y.jpg", ownerConfirmedAt: new Date(), approvedByAdmin: false });
     const m = await makeMatch(A, B, "shown_to_b");
     await requestPhoto(A, m.id);
     expect((await db().select().from(schema.photoRequests))[0]!.status).toBe("no_photo");
     expect(await db().select().from(schema.messages).where(eq(schema.messages.type, "image"))).toHaveLength(0);
+  });
+  it("a confirmed photo is shareable at once, without admin approval", async () => {
+    await makeUser(A, "male"); await makeUser(B, "female", {}, { photoShareConsent: true });
+    await getStorage().put("t/z.jpg", new Uint8Array([1, 2, 3]), "image/jpeg");
+    await db().insert(schema.photos).values({ phone: B, r2Key: "t/z.jpg", ownerConfirmedAt: new Date(), approvedByAdmin: null });
+    const m = await makeMatch(A, B, "shown_to_b");
+    await requestPhoto(A, m.id);
+    expect((await db().select().from(schema.photoRequests))[0]!.status).toBe("approved");
+    expect((await db().select().from(schema.messages).where(eq(schema.messages.type, "image"))).map((i) => i.phone)).toEqual([A]);
   });
   it("a no is relayed politely and nothing is sent", async () => {
     await pair(); await withPhoto(B);
@@ -240,9 +249,11 @@ describe("photo consent", () => {
     expect((await db().select().from(schema.messages).where(eq(schema.messages.type, "image")))).toHaveLength(0);
     expect((await outbound(A)).at(-1)).toContain("রাজি হননি");
   });
-  it("unapproved photos are never shared", async () => {
+  it("photos the owner has not confirmed, or an admin removed, are never shared", async () => {
     await pair();
-    await db().insert(schema.photos).values({ phone: B, r2Key: "t/x.jpg", ownerConfirmedAt: new Date(), approvedByAdmin: null });
+    await db().insert(schema.photos).values({ phone: B, r2Key: "t/x.jpg", ownerConfirmedAt: null, approvedByAdmin: null });
+    expect(await approvedPhoto(B)).toBeUndefined();
+    await db().insert(schema.photos).values({ phone: B, r2Key: "t/w.jpg", ownerConfirmedAt: new Date(), approvedByAdmin: false });
     expect(await approvedPhoto(B)).toBeUndefined();
     const m = await makeMatch(A, B, "shown_to_b");
     await requestPhoto(A, m.id);

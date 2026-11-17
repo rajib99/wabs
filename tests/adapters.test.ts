@@ -38,6 +38,16 @@ describe("lazy secrets", () => {
   it("names only the missing feature's variables, at first use", () => {
     vi.stubEnv("WHATSAPP_ACCESS_TOKEN", "");
     expect(() => env.whatsapp()).toThrow(/WhatsApp is not configured/);
+    const saved = { ...process.env };
+    try {
+      Object.assign(process.env, { R2_ACCESS_KEY_ID: "k", R2_SECRET_ACCESS_KEY: "s", R2_BUCKET: "b" });
+      process.env.R2_ACCOUNT_ID = "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com";
+      expect(() => env.r2()).toThrow(/32-character hex Account ID/);
+      process.env.R2_ACCOUNT_ID = " 0123456789abcdef0123456789abcdef\n";
+      expect(env.r2().R2_ACCOUNT_ID).toBe("0123456789abcdef0123456789abcdef");
+    } finally {
+      process.env = saved;
+    }
     vi.unstubAllEnvs();
     vi.stubEnv("GROQ_API_KEY", "");
     expect(() => env.groq()).toThrow(/GROQ_API_KEY/);

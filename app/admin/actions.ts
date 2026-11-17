@@ -63,7 +63,7 @@ export async function rejectPaymentAction(form: FormData): Promise<ActionResult>
 
 // ---- Photos (owner, verifier) ----
 export async function reviewPhotoAction(form: FormData): Promise<ActionResult> {
-  return attempt("ছবির সিদ্ধান্ত সংরক্ষিত হয়েছে", async () => {
+  return attempt("ছবি সরানো হয়েছে", async () => {
     const { email } = await requireRole("owner", "verifier");
     const id = z.string().uuid().parse(str(form, "id"));
     // Rejecting deletes the file, so an unexpected value must fail rather than fall through to reject.

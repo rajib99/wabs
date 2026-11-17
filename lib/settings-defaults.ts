@@ -16,7 +16,7 @@ export const DEFAULT_MESSAGES = {
   phone_retry: "দয়া করে একটি সঠিক মোবাইল নম্বর দিন (যেমন 01712345678), অথবা নিচের বাটনে চাপ দিন।",
   whatsapp_question: "ধন্যবাদ! এই নম্বরে ({phone}) কি WhatsApp চালু আছে? \"হ্যাঁ\" বা \"না\" লিখুন।",
   whatsapp_retry: "দয়া করে \"হ্যাঁ\" বা \"না\" লিখে জানান, নম্বরটিতে কি WhatsApp চালু আছে?",
-  photo_step_request: "শেষ ধাপ: আপনার (বা যাঁর জন্য পাত্র/পাত্রী খুঁজছেন তাঁর) এক বা একাধিক ছবি এখানে পাঠান। ছবি আমাদের টিম দেখে নেবে, তারপরই কাউকে দেখানো হবে।\n\nকোনো উপযুক্ত প্রস্তাবের পক্ষ ছবি দেখতে চাইলে আমরা কি আপনার ছবি তাঁকে দেখাতে পারি? \"হ্যাঁ\" বা \"না\" লিখুন। \"না\" বললে প্রতিবার আপনার অনুমতি নিয়ে তবেই পাঠাব।",
+  photo_step_request: "শেষ ধাপ: আপনার (বা যাঁর জন্য পাত্র/পাত্রী খুঁজছেন তাঁর) এক বা একাধিক ছবি এখানে পাঠান।\n\nকোনো উপযুক্ত প্রস্তাবের পক্ষ ছবি দেখতে চাইলে আমরা কি আপনার ছবি তাঁকে দেখাতে পারি? \"হ্যাঁ\" বা \"না\" লিখুন। \"না\" বললে প্রতিবার আপনার অনুমতি নিয়ে তবেই পাঠাব।",
   photo_step_retry: "দয়া করে \"হ্যাঁ\" বা \"না\" লিখে জানান: কোনো উপযুক্ত প্রস্তাবের পক্ষ ছবি দেখতে চাইলে আপনার ছবি কি দেখাতে পারি?",
   photo_step_received: "ছবিটি পেয়েছি, ধন্যবাদ! চাইলে আরও ছবি পাঠাতে পারেন। কোনো উপযুক্ত প্রস্তাবের পক্ষ ছবি দেখতে চাইলে আপনার ছবি কি দেখাতে পারি? \"হ্যাঁ\" বা \"না\" লিখুন।",
   contact_done: "ধন্যবাদ! আপনার প্রোফাইল সম্পূর্ণ হয়েছে। উপযুক্ত প্রস্তাব পেলে আমরা আবার মেসেজ দেব।",
@@ -116,6 +116,8 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   rate_limit_per_minute: 12,
   rate_limit_per_day: 300,
   max_media_bytes: 16 * 1024 * 1024,
+  // Photos are re-encoded to at most this size when they arrive.
+  max_photo_bytes: 2 * 1024 * 1024,
   min_transcript_chars: 4,
   // Approved Meta template names used outside the 24-hour window. Empty = message is skipped and logged.
   templates: { match_intro: "", match_update: "", payment_reminder: "", contact_release: "" },

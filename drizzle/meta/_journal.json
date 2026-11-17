@@ -64,6 +64,13 @@
       "when": 1794870027973,
       "tag": "0008_match_followup",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794910505857,
+      "tag": "0009_photo_auto_approve",
+      "breakpoints": true
     }
   ]
 }

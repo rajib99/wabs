@@ -89,8 +89,8 @@ export default async function UserPage({ params }: { params: Promise<{ phone: st
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={p.url} alt="প্রোফাইল ছবি" className="aspect-square w-full rounded-md bg-muted object-contain" />
                   : <div className="flex aspect-square items-center justify-center rounded-md bg-muted text-sm">বাতিল ও মুছে ফেলা</div>}
-                <span className="text-xs text-muted-foreground">{p.approvedByAdmin === null ? "অপেক্ষমাণ" : p.approvedByAdmin ? "অনুমোদিত" : "বাতিল"}</span>
-                {p.approvedByAdmin === null && <PhotoReview id={p.id} />}
+                <span className="text-xs text-muted-foreground">{p.approvedByAdmin === false ? "সরানো হয়েছে" : p.ownerConfirmedAt ? "সক্রিয়" : "মালিকের নিশ্চিতকরণ বাকি"}</span>
+                {p.approvedByAdmin !== false && <PhotoReview id={p.id} />}
               </div>
             ))}
           </div>

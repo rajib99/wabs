@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
 import { audit } from "@/lib/audit";
 import { sendToUser } from "@/lib/conversation/outbound";
 import { db, schema } from "@/lib/db";
@@ -18,9 +18,13 @@ export function isExplicitYes(text: string): boolean {
   return new RegExp(String.raw`(^|[\s,।])(${BANGLISH_YES}|pathan|pathiye\s*din|pathao|onumoti\s*dilam|dilam)([\s,।.!]|$)`).test(t);
 }
 
+/**
+ * The photo that may be shared: confirmed by its owner as theirs and not removed by an admin. No admin approval is
+ * needed first (null = never reviewed); sharing still needs the owner's yes, per request or in advance.
+ */
 export const approvedPhoto = async (phone: string) => {
   const [p] = await db().select().from(photos)
-    .where(and(eq(photos.phone, phone), eq(photos.approvedByAdmin, true)))
+    .where(and(eq(photos.phone, phone), isNotNull(photos.ownerConfirmedAt), or(isNull(photos.approvedByAdmin), eq(photos.approvedByAdmin, true))))
     .orderBy(desc(photos.createdAt)).limit(1);
   return p;
 };
@@ -33,7 +37,7 @@ export async function confirmProfilePhoto(phone: string, isMine: boolean) {
   if (!photo) return { ok: false as const, error: "no photo awaiting confirmation" };
   if (isMine) {
     await d.update(photos).set({ ownerConfirmedAt: new Date() }).where(eq(photos.id, photo.id));
-    return { ok: true as const, note: "Saved. The photo goes to admin review before it can be shared." };
+    return { ok: true as const, note: "Saved as their profile photo." };
   }
   await getStorage().delete(photo.r2Key);
   await d.delete(photos).where(eq(photos.id, photo.id));
