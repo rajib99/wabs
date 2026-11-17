@@ -3,7 +3,7 @@ import { logger } from "@/lib/logger";
 
 export type ImageFile = { bytes: Uint8Array; mime: string };
 
-/** Longest side tried first, then smaller ones: large enough to read a biodata, small enough to send. */
+/** Longest side tried first, then smaller ones: large enough to look sharp on a phone, small enough to send. */
 const SIDES = [2048, 1600, 1280, 1024];
 const QUALITIES = [82, 72, 62];
 

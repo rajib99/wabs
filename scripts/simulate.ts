@@ -93,7 +93,6 @@ async function onboard(p: Person, questions: Map<string, string>, firstReply?: s
     if (reply.includes("প্রোফাইল সম্পূর্ণ")) return; // after the closing photo question
     // The opt-in card for new-proposal alerts can follow the closing message and arrive last.
     if ((await history(p.phone)).some((m) => m.direction === "outbound" && m.text?.includes("প্রোফাইল সম্পূর্ণ"))) return;
-    if (reply.includes("বায়োডাটা") && i === 0) { reply = await say(p.phone, "না"); continue; }
     if (reply.includes("WhatsApp")) { reply = await say(p.phone, "হ্যাঁ"); continue; }
     // The photo step: "no" keeps the per-request photo consent that the couple-1 checks exercise.
     if (reply.includes("এক বা একাধিক ছবি")) { reply = await say(p.phone, "না"); continue; }

@@ -26,13 +26,6 @@ export interface Transcriber {
   transcribe(audio: Uint8Array, mime: string): Promise<Transcription>;
 }
 
-/** biodata: a profile document, with its text. photo: a picture of a person. unreadable: a file we could not read. */
-export type DocumentReading = { kind: "biodata" | "photo" | "other" | "unreadable"; text: string };
-
-export interface DocumentReader {
-  read(file: { bytes: Uint8Array; mime: string }): Promise<DocumentReading>;
-}
-
 export interface Embedder {
   /** Returns a normalized 384-dimension vector. */
   embed(text: string, kind: "query" | "passage"): Promise<number[]>;

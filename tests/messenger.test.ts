@@ -249,11 +249,11 @@ describe("contact number step", () => {
   };
   const user = async () => (await db().select().from(schema.users).where(eq(schema.users.phone, KEY)))[0]!;
 
-  it("consent leads to the biodata question, not a phone request", async () => {
+  it("consent leads to the first profile question, not a phone request", async () => {
     await db().insert(schema.users).values({ phone: KEY, status: "awaiting_consent", lastInboundAt: new Date() });
     await step("হ্যাঁ");
     expect((await user()).status).toBe("active");
-    expect(sends().at(-1).message.text).toContain("বায়োডাটা");
+    expect(sends().at(-1).message.text).toContain("প্রোফাইল তৈরি");
     expect(sends().at(-1).message.quick_replies).toBeUndefined();
   });
   it("while the profile is unfinished a number is just a message for the agent", async () => {

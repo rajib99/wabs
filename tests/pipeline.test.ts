@@ -133,9 +133,9 @@ describe("age gate and consent", () => {
     expect(u!.consentAt).toBeTruthy();
     const kept = await db().select().from(schema.messages).where(eq(schema.messages.direction, "inbound"));
     expect(kept.filter((m) => m.rawText?.includes("করিম"))).toHaveLength(0);
-    // The first question is about a ready-made biodata; the phone number is asked only at the end.
-    expect((await outbound(P)).at(-1)).toContain("বায়োডাটা");
-    expect((await step("না")).action).toBe("agent");
+    // Straight into the profile questions; the phone number is asked only at the end.
+    expect((await outbound(P)).at(-1)).toContain("প্রোফাইল তৈরি");
+    expect((await step("৩০")).action).toBe("agent");
   });
   it("an under-18 answer stops everything and later messages get silence", async () => {
     await step("হাই");

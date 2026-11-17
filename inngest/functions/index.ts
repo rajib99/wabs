@@ -5,7 +5,7 @@ import { askForNotifications } from "@/lib/conversation/notify";
 import { flushOutboundQueue, sendQueued, sendToUser } from "@/lib/conversation/outbound";
 import { drainGatewayEraseQueue } from "@/lib/safety";
 import {
-  askToRetype, documentUnreadable, embedMessage, handleImage, isPermanentMediaError, markProcessed, messageText, preflight, readDocument, storeMedia, transcribeMessage,
+  askToRetype, documentNotRead, embedMessage, handleImage, isPermanentMediaError, markProcessed, messageText, preflight, storeMedia, transcribeMessage,
 } from "@/lib/conversation/pipeline";
 import { db, schema } from "@/lib/db";
 import { closeMatch, advanceMatch, type MatchState } from "@/lib/matches";
@@ -28,11 +28,18 @@ export const waMessageReceived = inngest.createFunction(
     const action = await step.run("preflight", () => preflight(messageId));
     if (action === "done") return { action };
 
-    if (action === "image" || action === "document") {
+    // Files are not read: profiles are built only by asking questions.
+    if (action === "document") {
+      await step.run("document-not-read", () => documentNotRead(messageId));
+      return { action };
+    }
+
+    // Every image is a candidate profile photo.
+    if (action === "image") {
       let stored = false;
       try {
         // Only network hiccups are worth a retry; a refused link or missing storage settings fail at once.
-        stored = await step.run("store-image", () => storeMedia(messageId, action === "image" ? "photos" : "documents").catch((err) => {
+        stored = await step.run("store-image", () => storeMedia(messageId, "photos").catch((err) => {
           throw isPermanentMediaError(err) ? new NonRetriableError(err.message, { cause: err }) : err;
         }));
       } catch {
@@ -40,25 +47,8 @@ export const waMessageReceived = inngest.createFunction(
         return { action, stored };
       }
       if (!stored) return { action };
-      // A ready-made biodata (image or PDF) is read and handed to the agent; a picture of a person is a profile photo.
-      let kind: Awaited<ReturnType<typeof readDocument>>;
-      try {
-        // Reading is best-effort and the vision client already retries rate limits and server errors itself:
-        // any failure falls back to the photo path at once instead of after minutes of step retries.
-        kind = await step.run("read-document", () => readDocument(messageId).catch((err) => {
-          throw new NonRetriableError(err instanceof Error ? err.message : "document reader failed", { cause: err });
-        }));
-      } catch {
-        kind = action === "image" ? "photo" : "unreadable"; // the reader is down: keep the old photo behaviour
-      }
-      if (kind === "photo") {
-        await step.run("handle-image", () => handleImage(messageId));
-        return { action, kind };
-      }
-      if (kind === "unreadable") {
-        await step.run("document-unreadable", () => documentUnreadable(messageId));
-        return { action, kind };
-      }
+      await step.run("handle-image", () => handleImage(messageId));
+      return { action };
     }
 
     if (action === "voice") {

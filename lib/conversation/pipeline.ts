@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { inngest } from "@/inngest/client";
-import { getDocumentReader, getEmbedder, getTranscriber } from "@/lib/ai";
+import { getEmbedder, getTranscriber } from "@/lib/ai";
 import { getChannel, MediaTooLargeError } from "@/lib/channel";
 import { isConfigError } from "@/lib/env";
 import { db, schema } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { endUnderage, eraseUser, isRateLimited, isStopCommand, parseAgeGate, parseYesNo, scrubMessages, sendStopConfirmation } from "@/lib/safety";
+import { getNextQuestion } from "@/lib/profile";
 import { getSetting, msg } from "@/lib/settings";
 import { isExplicitYes } from "@/lib/photos";
 import { optimizeImage } from "@/lib/image";
@@ -113,9 +114,12 @@ export async function preflight(messageId: string): Promise<NextAction> {
         await sendToUser(phone, await msg("consent_declined"), { dedupeKey: gateKey, deferOnFailure: true });
         return done();
       }
-      // The first question: is there a ready-made biodata? The contact number comes last, after the profile.
+      // Every profile is built by asking questions: the system asks the first one, the agent the rest.
+      // The contact number comes last, after the profile.
       await d.update(users).set({ status: "active", consentAt: new Date() }).where(eq(users.phone, phone));
-      await sendToUser(phone, await msg("biodata_offer"), { dedupeKey: gateKey, deferOnFailure: true });
+      const first = await getNextQuestion(phone);
+      const start = await msg("profile_start");
+      await sendToUser(phone, first ? `${start}\n\n${first.bengaliText}` : start, { dedupeKey: gateKey, deferOnFailure: true });
       return done();
     }
     return done();
@@ -140,7 +144,7 @@ const extFor = (mime: string) =>
   : mime.startsWith("audio/") ? "ogg" : "bin";
 
 /** Downloads from the channel and stores privately. Returns false when the file was refused. */
-export async function storeMedia(messageId: string, folder: "voice" | "photos" | "documents"): Promise<boolean> {
+export async function storeMedia(messageId: string, folder: "voice" | "photos"): Promise<boolean> {
   const d = db();
   const [m] = await d.select().from(messages).where(eq(messages.id, messageId));
   if (!m?.mediaId) return false;
@@ -217,38 +221,11 @@ export async function embedMessage(messageId: string) {
   return true;
 }
 
-/** Marks the start of text read from a biodata file, for the agent and the history. */
-export const BIODATA_PREFIX = "[বায়োডাটা]";
-
-/**
- * Reads an image or file the user sent. A biodata becomes this message's text (like a voice transcript)
- * and goes to the agent; a photo goes to the profile photo flow. Returns only the kind, never the text.
- */
-export async function readDocument(messageId: string): Promise<"biodata" | "photo" | "unreadable"> {
-  const d = db();
-  const [m] = await d.select().from(messages).where(eq(messages.id, messageId));
-  if (!m?.mediaKey) return "unreadable";
-  if (m.transcript?.startsWith(BIODATA_PREFIX)) return "biodata"; // a retried step
-  let reading: Awaited<ReturnType<ReturnType<typeof getDocumentReader>["read"]>>;
-  try {
-    reading = await getDocumentReader().read(await getStorage().get(m.mediaKey));
-  } catch (err) {
-    logger.error({ err, messageId }, "document reader failed; treating the file as a photo or unreadable");
-    throw err;
-  }
-  if (reading.kind === "biodata") {
-    const caption = m.rawText?.trim() ? `${m.rawText.trim()}\n` : "";
-    await d.update(messages).set({ transcript: `${BIODATA_PREFIX}\n${caption}${reading.text}` }).where(eq(messages.id, messageId));
-    return "biodata";
-  }
-  // Any other picture keeps the old behaviour: ask whether it is the profile photo.
-  return m.type === "image" || reading.kind === "photo" ? "photo" : "unreadable";
-}
-
-export async function documentUnreadable(messageId: string) {
+/** A file (PDF, Word) is not read: profiles are built only by asking questions. Nothing is downloaded or kept. */
+export async function documentNotRead(messageId: string) {
   const [m] = await db().select().from(messages).where(eq(messages.id, messageId));
   if (!m) return;
-  await sendToUser(m.phone, await msg("document_unreadable"), { dedupeKey: `docunread-${messageId}` });
+  await sendToUser(m.phone, await msg("document_not_read"), { dedupeKey: `docnotread-${messageId}` });
   await markProcessed(messageId);
 }
 
@@ -276,7 +253,7 @@ async function contactStepReply(
 ): Promise<boolean> {
   const d = db();
   const phone = m.phone;
-  if (m.type !== "text") return false; // a photo, a biodata or a voice note takes its usual path
+  if (m.type !== "text") return false; // a photo, a file or a voice note takes its usual path
   const text = m.rawText ?? "";
 
   if (step === "number") {

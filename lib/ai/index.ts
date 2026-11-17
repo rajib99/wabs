@@ -1,14 +1,13 @@
 import { env } from "@/lib/env";
 import { DeepSeekProvider } from "./deepseek";
-import { MockDocumentReader, VisionDocumentReader } from "./document-reader";
 import { E5Embedder, MockEmbedder } from "./embedder";
 import { MockLLMProvider } from "./mock-llm";
 import { GroqTranscriber, MockTranscriber } from "./transcriber";
-import type { DocumentReader, Embedder, LLMProvider, Transcriber } from "./types";
+import type { Embedder, LLMProvider, Transcriber } from "./types";
 
 export * from "./types";
 
-const cache = globalThis as unknown as { __bsAi?: { llm?: LLMProvider; transcriber?: Transcriber; embedder?: Embedder; docReader?: DocumentReader } };
+const cache = globalThis as unknown as { __bsAi?: { llm?: LLMProvider; transcriber?: Transcriber; embedder?: Embedder } };
 const ai = (cache.__bsAi ??= {});
 
 export function getLLM(): LLMProvider {
@@ -20,10 +19,6 @@ export function getLLM(): LLMProvider {
 
 export function getTranscriber(): Transcriber {
   return (ai.transcriber ??= env.transcriber() === "groq" ? new GroqTranscriber() : new MockTranscriber());
-}
-
-export function getDocumentReader(): DocumentReader {
-  return (ai.docReader ??= env.docReader() === "vision" ? new VisionDocumentReader() : new MockDocumentReader());
 }
 
 export function getEmbedder(): Embedder {

@@ -30,7 +30,6 @@ Log in at `/admin`, open **সিমুলেটর**, and chat as any phone num
 | `CHANNEL` | `mock` | `messenger` |
 | `LLM_PROVIDER` | `mock` (rule-based, refused with `CHANNEL=whatsapp`) | `deepseek` |
 | `TRANSCRIBER` | `mock` (looks up `samples/voice/manifest.json`) | `groq` |
-| `DOC_READER` | `mock` (PDF text only; images are treated as photos) | `vision` |
 | `EMBEDDER` | `e5` or `mock` | `e5` |
 | `STORAGE` | `local` | `r2` |
 
@@ -43,9 +42,8 @@ BS talks to people through your Facebook Page. Messenger identifies people by a 
 ## Onboarding order
 
 1. 18+ check and privacy consent (deterministic, no AI).
-2. "Do you have a ready-made biodata?" A photo, screenshot or PDF of one is read (`DOC_READER`): PDFs with a text layer are read locally, images go to a remote vision model. The text, with phone numbers removed, goes to the agent, which saves every answer it finds and then asks only what is missing. Scanned PDFs without text get a request for a photo instead.
-3. The remaining profile questions.
-4. The contact number (share button or typed; typed numbers wait for an admin check), then "does this number have WhatsApp?" (`users.contact_has_whatsapp`). Matching starts after this.
+2. The profile questions: the system asks the first one right after consent, the agent the rest. Ready-made biodatas are not read; a file someone sends gets a polite request to answer the questions instead, and is not downloaded. Images are only ever profile photos.
+3. The contact number (share button or typed; typed numbers wait for an admin check), then "does this number have WhatsApp?" (`users.contact_has_whatsapp`). Matching starts after this.
 
 - **Shared with the button:** the number comes from the person's Facebook profile and is treated as verified.
 - **Typed instead:** it lands in the admin inbox as **নম্বর যাচাই**. That person is not matched until someone phones the number and presses **ফোন করে যাচাই করেছি**.
