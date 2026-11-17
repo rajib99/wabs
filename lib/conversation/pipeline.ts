@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { inngest } from "@/inngest/client";
 import { getDocumentReader, getEmbedder, getTranscriber } from "@/lib/ai";
 import { getChannel, MediaTooLargeError } from "@/lib/channel";
+import { isConfigError } from "@/lib/env";
 import { db, schema } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { endUnderage, eraseUser, isRateLimited, isStopCommand, parseAgeGate, parseYesNo, scrubMessages, sendStopConfirmation } from "@/lib/safety";
@@ -143,19 +144,28 @@ export async function storeMedia(messageId: string, folder: "voice" | "photos" |
   const [m] = await d.select().from(messages).where(eq(messages.id, messageId));
   if (!m?.mediaId) return false;
   if (m.mediaKey) return true;
+  let stage = "download";
   try {
     const file = await getChannel().downloadMedia(m.mediaId, await getSetting<number>("max_media_bytes"));
+    stage = "store";
     const key = `${folder}/${m.phone.replace(/\D/g, "")}/${m.id}.${extFor(file.mime)}`;
     await getStorage().put(key, file.bytes, file.mime);
     await d.update(messages).set({ mediaKey: key, mediaMime: file.mime }).where(eq(messages.id, messageId));
     return true;
   } catch (err) {
-    if (!(err instanceof MediaTooLargeError)) throw err;
+    if (!(err instanceof MediaTooLargeError)) {
+      // The cause must be visible: without it a failed photo only shows as a late "try again" to the user.
+      logger.error({ err, messageId, stage, folder }, "media could not be stored");
+      throw err;
+    }
     await sendToUser(m.phone, await msg("file_too_large"), { dedupeKey: `toolarge-${messageId}` });
     await markProcessed(messageId);
     return false;
   }
 }
+
+/** Errors that a retry cannot fix: missing settings, or a download the channel refused. Retrying them only delays the reply. */
+export const isPermanentMediaError = (err: unknown) => isConfigError(err) || (err instanceof Error && err.name === "PermanentMediaError");
 
 /** Returns true when there is usable text to continue with. */
 export async function transcribeMessage(messageId: string): Promise<boolean> {
@@ -215,7 +225,13 @@ export async function readDocument(messageId: string): Promise<"biodata" | "phot
   const [m] = await d.select().from(messages).where(eq(messages.id, messageId));
   if (!m?.mediaKey) return "unreadable";
   if (m.transcript?.startsWith(BIODATA_PREFIX)) return "biodata"; // a retried step
-  const reading = await getDocumentReader().read(await getStorage().get(m.mediaKey));
+  let reading: Awaited<ReturnType<ReturnType<typeof getDocumentReader>["read"]>>;
+  try {
+    reading = await getDocumentReader().read(await getStorage().get(m.mediaKey));
+  } catch (err) {
+    logger.error({ err, messageId }, "document reader failed; treating the file as a photo or unreadable");
+    throw err;
+  }
   if (reading.kind === "biodata") {
     const caption = m.rawText?.trim() ? `${m.rawText.trim()}\n` : "";
     await d.update(messages).set({ transcript: `${BIODATA_PREFIX}\n${caption}${reading.text}` }).where(eq(messages.id, messageId));

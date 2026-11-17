@@ -27,6 +27,10 @@ export class MediaTooLargeError extends Error {}
 
 /** The channel refused this send for a reason retrying cannot fix (policy, window, unreachable person). */
 export class PermanentSendError extends Error {}
+/** A media download that retrying cannot fix: the URL is refused, expired or forbidden. */
+export class PermanentMediaError extends Error {
+  override name = "PermanentMediaError";
+}
 
 export interface ChannelAdapter {
   /** True when free-form text is only allowed within 24 hours of the user's last message (Meta's rule). */

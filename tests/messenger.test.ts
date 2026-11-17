@@ -220,6 +220,23 @@ describe("sending", () => {
     }
     await expect(new MessengerAdapter().downloadMedia("https://evil.example/a.jpg", 100)).rejects.toThrow(/CDN/);
   });
+  it("a refused or expired media link is permanent; a server error may be retried", async () => {
+    const { MessengerAdapter } = await mod();
+    const { isPermanentMediaError } = await import("@/lib/conversation/pipeline");
+    const url = "https://scontent.xx.fbcdn.net/v/a.jpg";
+    const realFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = vi.fn(async () => new Response("gone", { status: 403 })) as typeof fetch;
+      const refused = await new MessengerAdapter().downloadMedia(url, 100).catch((e: unknown) => e);
+      expect(isPermanentMediaError(refused)).toBe(true);
+      globalThis.fetch = vi.fn(async () => new Response("busy", { status: 503 })) as typeof fetch;
+      const busy = await new MessengerAdapter().downloadMedia(url, 100).catch((e: unknown) => e);
+      expect(isPermanentMediaError(busy)).toBe(false);
+      expect(isPermanentMediaError(await new MessengerAdapter().downloadMedia("https://evil.example/a.jpg", 100).catch((e: unknown) => e))).toBe(true);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
 });
 
 describe("contact number step", () => {

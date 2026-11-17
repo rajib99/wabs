@@ -5,7 +5,7 @@ import { askForNotifications } from "@/lib/conversation/notify";
 import { flushOutboundQueue, sendQueued, sendToUser } from "@/lib/conversation/outbound";
 import { drainGatewayEraseQueue } from "@/lib/safety";
 import {
-  askToRetype, documentUnreadable, embedMessage, handleImage, markProcessed, messageText, preflight, readDocument, storeMedia, transcribeMessage,
+  askToRetype, documentUnreadable, embedMessage, handleImage, isPermanentMediaError, markProcessed, messageText, preflight, readDocument, storeMedia, transcribeMessage,
 } from "@/lib/conversation/pipeline";
 import { db, schema } from "@/lib/db";
 import { closeMatch, advanceMatch, type MatchState } from "@/lib/matches";
@@ -13,7 +13,6 @@ import { activeUserPhones, findMatches } from "@/lib/matching/find";
 import { hasOpenPayments, settleVerifiedPayment } from "@/lib/payments";
 import { getSetting, msg } from "@/lib/settings";
 import { eq } from "drizzle-orm";
-import { isConfigError } from "@/lib/env";
 
 /** Every inbound message, per-user in order. Step outputs carry ids and flags, never message text. */
 export const waMessageReceived = inngest.createFunction(
@@ -32,7 +31,10 @@ export const waMessageReceived = inngest.createFunction(
     if (action === "image" || action === "document") {
       let stored = false;
       try {
-        stored = await step.run("store-image", () => storeMedia(messageId, action === "image" ? "photos" : "documents"));
+        // Only network hiccups are worth a retry; a refused link or missing storage settings fail at once.
+        stored = await step.run("store-image", () => storeMedia(messageId, action === "image" ? "photos" : "documents").catch((err) => {
+          throw isPermanentMediaError(err) ? new NonRetriableError(err.message, { cause: err }) : err;
+        }));
       } catch {
         await step.run("image-fallback", async () => sendToUser(phone, await msg("fallback"), { dedupeKey: `fallback-${messageId}` }));
         return { action, stored };
@@ -41,9 +43,10 @@ export const waMessageReceived = inngest.createFunction(
       // A ready-made biodata (image or PDF) is read and handed to the agent; a picture of a person is a profile photo.
       let kind: Awaited<ReturnType<typeof readDocument>>;
       try {
-        // A missing reader key will not fix itself: fail the step at once so the fallback below runs without minutes of retries.
+        // Reading is best-effort and the vision client already retries rate limits and server errors itself:
+        // any failure falls back to the photo path at once instead of after minutes of step retries.
         kind = await step.run("read-document", () => readDocument(messageId).catch((err) => {
-          throw isConfigError(err) ? new NonRetriableError(err.message, { cause: err }) : err;
+          throw new NonRetriableError(err instanceof Error ? err.message : "document reader failed", { cause: err });
         }));
       } catch {
         kind = action === "image" ? "photo" : "unreadable"; // the reader is down: keep the old photo behaviour

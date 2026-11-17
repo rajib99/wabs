@@ -5,7 +5,7 @@ import { logger } from "@/lib/logger";
 import { getSetting } from "@/lib/settings";
 import { normalizeDigits } from "@/lib/text";
 import {
-  type ChannelAdapter, type InboundMessage, type MediaFile, MediaTooLargeError, type NotificationOptin, PermanentSendError, type ReceivedPayload,
+  type ChannelAdapter, type InboundMessage, type MediaFile, MediaTooLargeError, type NotificationOptin, PermanentMediaError, PermanentSendError, type ReceivedPayload,
   type SendResult, type StatusUpdate,
 } from "./types";
 
@@ -264,8 +264,10 @@ export class MessengerAdapter implements ChannelAdapter {
   }
 
   async downloadMedia(url: string, maxBytes: number): Promise<MediaFile> {
-    if (!isMessengerMediaUrl(url)) throw new PermanentSendError("media URL is not on Meta's CDN");
+    if (!isMessengerMediaUrl(url)) throw new PermanentMediaError(`media URL is not on Meta's CDN: ${new URL(url).hostname}`);
     const res = await fetch(url, { redirect: "error" });
+    // 4xx (expired or forbidden link) will not change on a retry; 5xx and network errors may.
+    if (res.status >= 400 && res.status < 500) throw new PermanentMediaError(`Messenger media download refused: ${res.status}`);
     if (!res.ok) throw new Error(`Messenger media download failed: ${res.status}`);
     if (Number(res.headers.get("content-length") ?? 0) > maxBytes) throw new MediaTooLargeError();
     const bytes = new Uint8Array(await res.arrayBuffer());

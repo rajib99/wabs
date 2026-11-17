@@ -48,7 +48,8 @@ export class VisionDocumentReader implements DocumentReader {
   private conn() {
     if (!this.client) {
       const cfg = env.vision();
-      this.client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseURL });
+      // A person is waiting for a reply: a slow reader must give up quickly so the photo path takes over.
+      this.client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseURL, timeout: 20_000, maxRetries: 1 });
       this.model = cfg.model;
     }
     return { client: this.client, model: this.model! };
